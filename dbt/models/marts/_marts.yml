@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: int_months
+    columns:
+      - name: month_start
+        tests: [unique, not_null]
+
+  - name: int_subscription_months
+    description: One row per subscription per active month. The revenue spine.
+    columns:
+      - name: month_start
+        tests: [not_null]
+      - name: subscription_id
+        tests: [not_null]
+      - name: mrr_eur
+        tests: [not_null]
+
+  - name: mart_mrr_monthly
+    description: "KPI: MRR and ARR by month, with growth and ARPA."
+    columns:
+      - name: month_start
+        tests: [unique, not_null]
+      - name: mrr_eur
+        tests: [not_null]
+      - name: arr_eur
+        tests: [not_null]
+
+  - name: mart_gross_margin_monthly
+    description: "KPI: gross profit margin by month."
+    columns:
+      - name: month_start
+        tests: [unique, not_null]
+      - name: gross_margin_pct
+        tests: [not_null]
+
+  - name: mart_churn_monthly
+    description: "KPI: logo churn by month."
+    columns:
+      - name: month_start
+        tests: [unique, not_null]
+      - name: merchants_at_start
+        tests: [not_null]

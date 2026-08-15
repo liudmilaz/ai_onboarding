@@ -1,0 +1,19 @@
+invented_software:
+  target: postgres
+  outputs:
+    postgres:
+      type: postgres
+      # dbt runs on the host (from .venv), not inside the compose network, so
+      # this is the published port from docker-compose.yml - not the service
+      # name "postgres", which only resolves between containers. 5433 avoids
+      # clashing with any Postgres already running natively on 5432.
+      host: localhost
+      port: 5433
+      # Credentials come from .env, exported by start.sh. No defaults here on
+      # purpose: a missing variable should fail loudly rather than silently
+      # fall back to a value committed to the repo.
+      user: "{{ env_var('POSTGRES_USER') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD') }}"
+      dbname: "{{ env_var('POSTGRES_DB') }}"
+      schema: analytics
+      threads: 4
