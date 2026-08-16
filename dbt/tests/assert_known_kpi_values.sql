@@ -7,24 +7,24 @@ with expected as (
         (date '2024-01-01', 1138.0),
         (date '2024-12-01', 1641.0),
         (date '2025-12-01', 1510.0)
-    ) as t(month_start, expected_mrr_eur)
+    ) as t(date_month, expected_mrr_eur)
 ),
 
 mrr_check as (
     select
-        e.month_start,
+        e.date_month,
         'mrr'               as metric,
         a.mrr_eur           as actual,
         e.expected_mrr_eur  as expected
     from expected e
-    join {{ ref('mart_mrr_monthly') }} a using (month_start)
+    join {{ ref('mart_mrr_monthly') }} a using (date_month)
     where abs(a.mrr_eur - e.expected_mrr_eur) > 1.0
 ),
 
 -- Blended gross margin across the whole horizon should be 84.9%
 margin_check as (
     select
-        null::date  as month_start,
+        null::date  as date_month,
         'blended_gross_margin' as metric,
         round(100.0 * sum(gross_profit_eur) / nullif(sum(revenue_eur), 0), 1) as actual,
         84.9        as expected
