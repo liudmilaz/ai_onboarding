@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Provision Metabase from scratch: admin user, database connection, cards, dashboard.
+"""Provision Metabase: admin user, database connection, dashboards, permissions.
 
-Idempotent-ish: if setup has already run, it logs in with the known credentials
-instead. Uses only the standard library so it can run on a bare host.
+Idempotent. Cards, dashboards, collections and groups are matched by name and
+reused, so re-running never duplicates anything. Uses only the standard library
+so it can run on a bare host.
 """
 import json
 import os
@@ -19,8 +20,10 @@ PASSWORD = os.environ["METABASE_PASSWORD"]
 PG_USER = os.environ["POSTGRES_USER"]
 PG_PASSWORD = os.environ["POSTGRES_PASSWORD"]
 PG_DB = os.environ["POSTGRES_DB"]
+
 DB_NAME = "Invented Software (analytics)"
 MARTS = "analytics_marts"
+READONLY_GROUP = "Analysts (read-only)"
 
 
 def call(path, data=None, method=None, session=None):
@@ -56,9 +59,8 @@ def get_session():
     """
     props = call("/api/session/properties")
     if not props.get("has-user-setup"):
-        token = props.get("setup-token")
         res = call("/api/setup", {
-            "token": token,
+            "token": props.get("setup-token"),
             "user": {
                 "first_name": "Invented", "last_name": "Analyst",
                 "email": EMAIL, "password": PASSWORD, "site_name": "Invented Software",
@@ -86,73 +88,27 @@ def ensure_database(session):
     return db["id"]
 
 
-def native_card(session, db_id, name, sql, display, viz=None):
-    return call("/api/card", {
-        "name": name,
-        "dataset_query": {
-            "type": "native",
-            "native": {"query": sql},
-            "database": db_id,
-        },
-        "display": display,
-        "visualization_settings": viz or {},
-    }, session=session)
+def sync_and_wait(session, db_id, tries=24):
+    """Trigger one sync, then poll until the tables we query are visible.
 
-
-CARDS = [
-    ("MRR by month", f"""
-        select month_start, mrr_eur
-        from {MARTS}.mart_mrr_monthly
-        order by month_start
-    """, "line", {"graph.dimensions": ["month_start"], "graph.metrics": ["mrr_eur"]}),
-
-    ("Exit ARR", f"""
-        select arr_eur
-        from {MARTS}.mart_mrr_monthly
-        order by month_start desc
-        limit 1
-    """, "scalar", {}),
-
-    ("Active merchants by month", f"""
-        select month_start, active_merchants
-        from {MARTS}.mart_mrr_monthly
-        order by month_start
-    """, "bar", {"graph.dimensions": ["month_start"], "graph.metrics": ["active_merchants"]}),
-
-    ("Gross margin %", f"""
-        select month_start, gross_margin_pct
-        from {MARTS}.mart_gross_margin_monthly
-        order by month_start
-    """, "line", {"graph.dimensions": ["month_start"], "graph.metrics": ["gross_margin_pct"]}),
-
-    ("Logo churn %", f"""
-        select month_start, logo_churn_pct
-        from {MARTS}.mart_churn_monthly
-        where merchants_at_start > 0
-        order by month_start
-    """, "line", {"graph.dimensions": ["month_start"], "graph.metrics": ["logo_churn_pct"]}),
-]
-
-LAYOUT = [(0, 0, 6, 4), (6, 0, 6, 4), (0, 4, 6, 4), (6, 4, 6, 4), (0, 8, 12, 4)]
-
-
-DASH_NAME = "Invented Software — Executive Dashboard"
-
-
-def sync_and_wait(session, db_id, tries=10):
-    """Ask Metabase to sync, then poll until the marts are actually visible.
-
-    A freshly registered database 404s on sync_schema for a few seconds, and a
-    202 only means the sync was queued - not that tables exist yet. Poll for the
-    tables we are about to query rather than sleeping a fixed interval.
+    Two things this gets right that the obvious version does not:
+      - sync_schema is called ONCE. Calling it on every poll restarts the sync
+        before it can finish, so it never completes and the wait always expires.
+      - a freshly registered database 404s on sync_schema for a few seconds, so
+        the initial trigger is retried until it takes.
     """
-    needed = {"mart_mrr_monthly", "mart_gross_margin_monthly", "mart_churn_monthly"}
-    for attempt in range(tries):
+    needed = {"mart_mrr_monthly", "mart_unit_economics", "fct_subscription_month"}
+
+    for _ in range(6):                       # get the sync started
         try:
             call(f"/api/database/{db_id}/sync_schema", {}, session=session)
+            break
         except urllib.error.HTTPError as exc:
             if exc.code != 404:
                 raise
+            time.sleep(5)
+
+    for _ in range(tries):                   # then only observe
         try:
             meta = call(f"/api/database/{db_id}/metadata", session=session)
             present = {t["name"] for t in meta.get("tables", [])}
@@ -166,11 +122,7 @@ def sync_and_wait(session, db_id, tries=10):
 
 
 def remove_sample_content(session):
-    """Drop Metabase's bundled H2 demo database.
-
-    It ships ~27 example questions about Doohickeys and Gizmos, which clutter
-    the question list and make it ambiguous which cards are actually ours.
-    """
+    """Drop Metabase's bundled H2 demo database and its ~27 example questions."""
     for db in call("/api/database", session=session).get("data", []):
         if db.get("engine") == "h2" and db.get("is_sample"):
             call(f"/api/database/{db['id']}", method="DELETE", session=session)
@@ -186,6 +138,235 @@ def existing_by_name(session, path, name):
     return None
 
 
+def upsert_card(session, db_id, name, sql, display, viz, collection_id):
+    """Create the card, or UPDATE an existing one with the same name.
+
+    Updating matters: matching by name alone and skipping would leave a card
+    pinned to whatever SQL it was first created with. When the models renamed
+    month_start to date_month, five reused cards kept querying a column that no
+    longer existed and failed silently on the dashboard while provisioning
+    still reported success. The definition in this file is the source of truth.
+    """
+    body = {
+        "name": name,
+        "dataset_query": {"type": "native", "native": {"query": sql}, "database": db_id},
+        "display": display,
+        "visualization_settings": viz or {},
+        "collection_id": collection_id,
+    }
+    card_id = existing_by_name(session, "/api/card", name)
+    if card_id is None:
+        return call("/api/card", body, session=session)["id"], "created"
+    call(f"/api/card/{card_id}", body, method="PUT", session=session)
+    return card_id, "updated"
+
+
+def ts(dim, metric):
+    """visualization_settings for a simple time series."""
+    return {"graph.dimensions": [dim], "graph.metrics": [metric]}
+
+
+# ---------------------------------------------------------------- dashboards
+# Each card is (name, sql, display, viz, (col, row, width, height)).
+# The grid is 12 columns wide.
+
+EXECUTIVE = [
+    ("MRR by month", f"""
+        select date_month, mrr_eur from {MARTS}.mart_mrr_monthly order by date_month
+    """, "line", ts("date_month", "mrr_eur"), (0, 0, 8, 4)),
+
+    ("Exit ARR", f"""
+        select arr_eur from {MARTS}.mart_mrr_monthly order by date_month desc limit 1
+    """, "scalar", {}, (8, 0, 4, 4)),
+
+    ("Net Revenue Retention", f"""
+        select date_month, net_revenue_retention_pct
+        from {MARTS}.mart_revenue_movement
+        where starting_mrr_eur > 0 order by date_month
+    """, "line", ts("date_month", "net_revenue_retention_pct"), (0, 4, 6, 4)),
+
+    ("Gross margin %", f"""
+        select date_month, gross_margin_pct
+        from {MARTS}.mart_gross_margin_monthly order by date_month
+    """, "line", ts("date_month", "gross_margin_pct"), (6, 4, 6, 4)),
+
+    ("Logo churn %", f"""
+        select date_month, logo_churn_pct from {MARTS}.mart_churn_monthly
+        where merchants_at_start > 0 order by date_month
+    """, "line", ts("date_month", "logo_churn_pct"), (0, 8, 6, 4)),
+
+    ("Net burn by month", f"""
+        select date_month, net_burn_eur from {MARTS}.mart_burn_monthly order by date_month
+    """, "bar", ts("date_month", "net_burn_eur"), (6, 8, 6, 4)),
+
+    ("LTV : CAC (blended)", f"""
+        select ltv_to_blended_cac_ratio from {MARTS}.mart_unit_economics
+    """, "scalar", {}, (0, 12, 4, 3)),
+
+    ("Runway (months, latest)", f"""
+        select runway_months from {MARTS}.mart_burn_monthly
+        where runway_months is not null order by date_month desc limit 1
+    """, "scalar", {}, (4, 12, 4, 3)),
+
+    ("Unit economics scorecard", f"""
+        select arpa_eur, gross_margin_pct, ltv_eur, cac_eur, blended_cac_eur,
+               cac_payback_months, ltv_to_cac_ratio, ltv_to_blended_cac_ratio
+        from {MARTS}.mart_unit_economics
+    """, "table", {}, (8, 12, 4, 3)),
+]
+
+# Drill-downs. These query the FACT joined to its DIMENSIONS - the whole point
+# of the star. None of them needed a new dbt model.
+OPERATIONAL = [
+    ("MRR by market", f"""
+        select k.country_name, round(sum(f.mrr_eur), 2) as mrr_eur
+        from {MARTS}.fct_subscription_month f
+        join {MARTS}.dim_market k on f.country_code = k.country_code
+        where f.date_month = (select max(date_month) from {MARTS}.fct_subscription_month)
+        group by 1 order by 2 desc
+    """, "bar", ts("country_name", "mrr_eur"), (0, 0, 6, 4)),
+
+    ("MRR by business type", f"""
+        select m.business_type, round(sum(f.mrr_eur), 2) as mrr_eur
+        from {MARTS}.fct_subscription_month f
+        join {MARTS}.dim_merchant m on f.merchant_id = m.merchant_id
+        where f.date_month = (select max(date_month) from {MARTS}.fct_subscription_month)
+        group by 1 order by 2 desc
+    """, "bar", ts("business_type", "mrr_eur"), (6, 0, 6, 4)),
+
+    ("MRR by plan", f"""
+        select p.product_name, round(sum(f.mrr_eur), 2) as mrr_eur,
+               count(*) as subscriptions
+        from {MARTS}.fct_subscription_month f
+        join {MARTS}.dim_product p on f.plan_sku = p.sku
+        where f.date_month = (select max(date_month) from {MARTS}.fct_subscription_month)
+        group by 1 order by 2 desc
+    """, "bar", ts("product_name", "mrr_eur"), (0, 4, 6, 4)),
+
+    ("Acquisition spend by channel", f"""
+        select channel, round(sum(spend_eur), 2) as spend_eur
+        from {MARTS}.fct_acquisition_spend group by 1 order by 2 desc
+    """, "bar", ts("channel", "spend_eur"), (6, 4, 6, 4)),
+
+    ("MRR waterfall", f"""
+        select date_month, starting_mrr_eur, new_mrr_eur, expansion_mrr_eur,
+               contraction_mrr_eur, churned_mrr_eur, ending_mrr_eur,
+               gross_revenue_churn_pct, net_revenue_retention_pct
+        from {MARTS}.mart_revenue_movement
+        where starting_mrr_eur > 0 order by date_month desc
+    """, "table", {}, (0, 8, 12, 5)),
+
+    ("CAC by month (NULL where no signups)", f"""
+        select date_month, acquisition_spend_eur, new_merchants, cac_eur,
+               unattributed_spend_eur
+        from {MARTS}.mart_cac_monthly
+        where has_spend_data order by date_month
+    """, "table", {}, (0, 13, 6, 5)),
+
+    ("Operating cost by category", f"""
+        select cost_category, round(sum(amount_eur), 2) as amount_eur
+        from {MARTS}.fct_operating_cost group by 1 order by 2 desc
+    """, "bar", ts("cost_category", "amount_eur"), (6, 13, 6, 5)),
+
+    ("Churned merchants", f"""
+        select m.merchant_name, m.business_type, k.country_name,
+               m.signup_date, m.churn_date
+        from {MARTS}.dim_merchant m
+        join {MARTS}.dim_market k on m.country_code = k.country_code
+        where m.is_churned order by m.churn_date desc
+    """, "table", {}, (0, 18, 6, 5)),
+
+    ("Ledger vs P&L divergence", f"""
+        select date_month, net_cash_flow_eur, recorded_cash_change_eur,
+               ledger_vs_pnl_gap_eur
+        from {MARTS}.mart_burn_monthly
+        where ledger_vs_pnl_gap_eur is not null order by date_month
+    """, "line", ts("date_month", "ledger_vs_pnl_gap_eur"), (6, 18, 6, 5)),
+]
+
+DASHBOARDS = [
+    ("Invented Software — Executive Dashboard",
+     "MRR/ARR, retention, margin, churn and burn. One widget per business question.",
+     EXECUTIVE),
+    ("Invented Software — Operational Reports",
+     "Drill-downs by market, business type, plan and channel, queried from the star schema.",
+     OPERATIONAL),
+]
+
+
+def ensure_collection(session, name):
+    cid = existing_by_name(session, "/api/collection", name)
+    if cid is None:
+        cid = call("/api/collection", {"name": name, "description":
+                   "Invented Software analytics. Provisioned by scripts/provision_metabase.py."},
+                   session=session)["id"]
+        print(f"  collection created: {name}", flush=True)
+    return cid
+
+
+def build_dashboard(session, db_id, collection_id, name, description, cards):
+    dash_id = existing_by_name(session, "/api/dashboard", name)
+    if dash_id is None:
+        dash_id = call("/api/dashboard", {
+            "name": name, "description": description, "collection_id": collection_id,
+        }, session=session)["id"]
+
+    dashcards = []
+    for i, (card_name, sql, display, viz, (col, row, w, h)) in enumerate(cards):
+        card_id, _ = upsert_card(session, db_id, card_name, sql.strip(),
+                                 display, viz, collection_id)
+        dashcards.append({
+            "id": -(i + 1), "card_id": card_id,
+            "row": row, "col": col, "size_x": w, "size_y": h,
+            "parameter_mappings": [], "visualization_settings": {},
+        })
+    call(f"/api/dashboard/{dash_id}", {"dashcards": dashcards}, method="PUT", session=session)
+    print(f"  dashboard: {name} ({len(cards)} cards)", flush=True)
+    return dash_id
+
+
+def archive_orphaned_cards(session, defined_names):
+    """Archive cards this script no longer defines.
+
+    Without this, a card dropped from a dashboard definition lingers in the
+    question list forever - and if the models moved underneath it, it lingers
+    BROKEN. Provisioning owns these cards, so it has to clean up after itself.
+    """
+    for card in call("/api/card", session=session):
+        if card.get("archived") or card["name"] in defined_names:
+            continue
+        call(f"/api/card/{card['id']}", {"archived": True}, method="PUT", session=session)
+        print(f"  archived orphaned card: {card['name']}", flush=True)
+
+
+def configure_permissions(session, db_id):
+    """Create a read-only analyst group with view-only data access.
+
+    Best effort: the permissions graph shape moves between Metabase versions,
+    so a failure here is reported rather than fatal - the dashboards are still
+    correct without it.
+    """
+    try:
+        groups = call("/api/permissions/group", session=session)
+        gid = next((g["id"] for g in groups if g["name"] == READONLY_GROUP), None)
+        if gid is None:
+            gid = call("/api/permissions/group", {"name": READONLY_GROUP}, session=session)["id"]
+            print(f"  group created: {READONLY_GROUP}", flush=True)
+
+        graph = call("/api/permissions/graph", session=session)
+        groups_graph = graph.get("groups", {})
+        groups_graph.setdefault(str(gid), {})[str(db_id)] = {
+            "view-data": "unrestricted",
+            "create-queries": "query-builder",   # no raw SQL for this group
+        }
+        call("/api/permissions/graph",
+             {"revision": graph.get("revision"), "groups": groups_graph},
+             method="PUT", session=session)
+        print("  permissions: read-only group may query but not write SQL", flush=True)
+    except Exception as exc:  # noqa: BLE001 - non-fatal by design
+        print(f"  permissions step skipped ({type(exc).__name__}: {exc})", flush=True)
+
+
 def main():
     print("waiting for Metabase ...", flush=True)
     wait_for_health()
@@ -197,30 +378,19 @@ def main():
     sync_and_wait(session, db_id)
     remove_sample_content(session)
 
-    dash_id = existing_by_name(session, "/api/dashboard", DASH_NAME)
-    if dash_id is None:
-        dash_id = call("/api/dashboard", {
-            "name": DASH_NAME,
-            "description": "MRR/ARR, gross margin and logo churn from the dbt marts.",
-        }, session=session)["id"]
+    collection_id = ensure_collection(session, "Invented Software")
 
-    dashcards = []
-    for i, (name, sql, display, viz) in enumerate(CARDS):
-        card_id = existing_by_name(session, "/api/card", name)
-        if card_id is None:
-            card_id = native_card(session, db_id, name, sql.strip(), display, viz)["id"]
-            print(f"  card created: {name}", flush=True)
-        else:
-            print(f"  card reused:  {name}", flush=True)
-        x, y, w, h = LAYOUT[i]
-        dashcards.append({
-            "id": -(i + 1), "card_id": card_id,
-            "row": y, "col": x, "size_x": w, "size_y": h,
-            "parameter_mappings": [], "visualization_settings": {},
-        })
+    ids = []
+    for name, description, cards in DASHBOARDS:
+        ids.append(build_dashboard(session, db_id, collection_id, name, description, cards))
 
-    call(f"/api/dashboard/{dash_id}", {"dashcards": dashcards}, method="PUT", session=session)
-    print(f"\nDashboard ready: {BASE}/dashboard/{dash_id}")
+    archive_orphaned_cards(
+        session, {c[0] for _, _, cards in DASHBOARDS for c in cards})
+    configure_permissions(session, db_id)
+
+    print("")
+    for (name, _, _), dash_id in zip(DASHBOARDS, ids):
+        print(f"{name}: {BASE}/dashboard/{dash_id}")
     print(f"Login: {EMAIL}  (password is in .env)")
 
 
