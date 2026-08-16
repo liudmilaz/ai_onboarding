@@ -48,10 +48,20 @@ It creates a Python environment if missing, starts Colima and the containers, wa
 - **Operational** — <http://localhost:3000/dashboard/3>: drill-downs by market, business type, plan and channel, the MRR waterfall, CAC by month, and the ledger-vs-P&L divergence
 
 ```bash
-./start.sh --clean
+./start.sh --clean     # destroy containers and volumes first - cold-start proof
+./start.sh --refresh   # reload the CSVs and rebuild, containers left running
+./start.sh --help
 ```
 
-Destroys the containers and volumes first, so the run proves a genuine cold start.
+Every run is logged to `logs/run-<timestamp>.log`. Failures report the step,
+line, command and a targeted hint rather than a bare stack trace.
+
+**Refreshing data** replaces the CSVs in `saas/` and runs `./start.sh --refresh`
+(53 s). Nothing touches the database until the CSVs satisfy
+`db/schema_contract.json` — `COPY` maps columns by *position*, so a reordering of
+two same-typed columns would otherwise load silently and corrupt every
+downstream number. If a schema change is intended, accept it with
+`python3 scripts/validate_csv_schema.py --generate`.
 
 **Verified end to end**: from `docker compose down -v` to live dashboards in **261 seconds**, with `dbt build` reporting `PASS=102 ERROR=0` across 25 models and 77 tests, and **18 of 18 dashboard cards returning data**. The marts reproduce the figures in `HANDOFF.md` §4 exactly — MRR €1,138 / €1,641 / €1,510 and exit ARR €18,117.
 
@@ -71,11 +81,11 @@ Three environment details this stack depends on, each of which cost time to find
 |---|---|
 | `dbt/models/staging/` | One model per raw table. Minor units and local currency are converted here and nowhere else. |
 | `dbt/models/intermediate/` | `int_subscription_months` — the spine: 117 subscription periods exploded to one row per subscription per active month. |
-| `docs/` | Business requirements, ADRs, database schema, AI process report. |
+| `docs/` | Business requirements, ADRs, database schema, operations manual, AI process report. |
 | `dbt/models/marts/` | Kimball star — `dim_*` conformed dimensions, `fct_*` facts with declared grain and additivity, `mart_*` KPI models. |
 | `dbt/tests/` | `assert_known_kpi_values` pins the figures published in `HANDOFF.md` §4 as a regression anchor; `assert_source_integrity` checks row counts and the rules generic tests can't express. |
 | `db/` | Postgres schema, CSV loaders, and the data-quality gate run before modelling. |
-| `scripts/` | Metabase provisioning. |
+| `scripts/` | Metabase provisioning and the CSV schema-contract validator. |
 | `docker-compose.yml` | Postgres 16 and Metabase, with healthchecks gating startup order. |
 
 ## The eleven KPIs
@@ -114,4 +124,5 @@ cd dbt && ../.venv/bin/dbt docs generate --profiles-dir profiles
 | `docs/business_requirements.md` | Business questions, calculation specs, data conventions |
 | `docs/adr.md` | Seven architecture decision records with consequences |
 | `docs/database_schema.md` | All 31 tables, generated from `information_schema` |
+| `docs/operations.md` | Running, refreshing, troubleshooting, backup, capacity |
 | `docs/ai_process_report.md` | How this was built with AI, including what failed |

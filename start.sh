@@ -1,23 +1,57 @@
 #!/usr/bin/env bash
-# Bring the Invented Software analytics platform up from cold.
+# Invented Software analytics platform.
 #
-#   ./start.sh           start (or resume) the stack and rebuild the models
-#   ./start.sh --clean   destroy volumes first, so the run proves a cold start
+#   ./start.sh             start (or resume) the stack and rebuild the models
+#   ./start.sh --clean     destroy containers and volumes first - proves a cold start
+#   ./start.sh --refresh   reload the CSVs and rebuild, leaving containers running
+#   ./start.sh --help      this message
 #
-# Postgres holds the data, dbt builds the models, Metabase serves the dashboard.
-set -euo pipefail
+# Postgres holds the data, dbt builds the models, Metabase serves the dashboards.
+# Every run is logged to logs/run-<timestamp>.log.
+set -Eeuo pipefail
 cd "$(dirname "$0")"
 
-CLEAN=0
+MODE=start
 for arg in "$@"; do
     case "$arg" in
-        --clean) CLEAN=1 ;;
-        *) echo "unknown option: $arg" >&2; exit 2 ;;
+        --clean)   MODE=clean ;;
+        --refresh) MODE=refresh ;;
+        --help|-h) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "unknown option: $arg (try --help)" >&2; exit 2 ;;
     esac
 done
 
+# --- logging -----------------------------------------------------------------
+mkdir -p logs
+LOG="logs/run-$(date +%Y%m%d-%H%M%S).log"
+# Everything below goes to the terminal AND the log. Tee rather than redirect so
+# a run stays watchable while remaining auditable afterwards.
+exec > >(tee -a "$LOG") 2>&1
+START_TS=$(date +%s)
+
 say()  { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 fail() { printf '\n\033[1;31m!! %s\033[0m\n' "$1" >&2; exit 1; }
+
+# --- error handling ----------------------------------------------------------
+# Without this a failure 200 lines into a build shows only the last command's
+# stderr, with no indication of which step died.
+on_error() {
+    local exit_code=$? line=$1 cmd=$2
+    printf '\n\033[1;31m!! FAILED\033[0m at line %s (exit %s)\n' "$line" "$exit_code" >&2
+    printf '   command: %s\n' "$cmd" >&2
+    printf '   step:    %s\n' "${CURRENT_STEP:-unknown}" >&2
+    printf '   log:     %s\n' "$LOG" >&2
+    case "${CURRENT_STEP:-}" in
+        "container runtime") printf '   hint:    is Colima running? try: colima start --vm-type vz\n' >&2 ;;
+        "schema contract")   printf '   hint:    a CSV changed shape. If intended: python3 scripts/validate_csv_schema.py --generate\n' >&2 ;;
+        "data quality")      printf '   hint:    the raw load is bad; inspect with db/validate.sql\n' >&2 ;;
+        "dbt build")         printf '   hint:    see dbt/target/run_results.json for the failing node\n' >&2 ;;
+        "metabase")          printf '   hint:    is Metabase healthy? curl -s localhost:3000/api/health\n' >&2 ;;
+    esac
+    exit "$exit_code"
+}
+trap 'on_error "$LINENO" "$BASH_COMMAND"' ERR
+step() { CURRENT_STEP="$1"; say "$2"; }
 
 # Compose ships either as a `docker compose` CLI plugin or as a standalone
 # `docker-compose` binary. Homebrew installs the plugin under the Homebrew
@@ -39,7 +73,7 @@ compose() {
 # passwords on first run, so the repository carries no credential literals and
 # two checkouts never share a password. See .env.example for the variables.
 if [[ ! -f .env ]]; then
-    say "Generating .env with fresh random passwords"
+    step credentials "Generating .env with fresh random passwords"
     # openssl rather than `tr </dev/urandom | head`: head closes the pipe early,
     # tr takes SIGPIPE, and under `set -o pipefail` that aborts the script.
     # Metabase rejects admin passwords without upper, lower, digit and symbol.
@@ -64,15 +98,23 @@ set -a
 source .env
 set +a
 
+# --- schema contract ---------------------------------------------------------
+# Runs before anything touches the database. COPY maps columns by POSITION, so a
+# reordering of two same-typed columns would load without error and silently
+# corrupt every downstream number. This is the gate that catches that.
+step "schema contract" "Validating CSV schema contract"
+python3 scripts/validate_csv_schema.py --check
+
 # --- python environment ------------------------------------------------------
 if [[ ! -x .venv/bin/dbt ]]; then
-    say "Creating Python environment and installing dbt"
+    step python "Creating Python environment and installing dbt"
     python3 -m venv .venv
     .venv/bin/pip install --quiet --upgrade pip
     .venv/bin/pip install --quiet dbt-postgres
 fi
 
 # --- container runtime -------------------------------------------------------
+step "container runtime" "Checking container runtime"
 command -v docker >/dev/null || fail "docker not found"
 if ! docker info >/dev/null 2>&1; then
     # Colima's VM is per-user and does not survive a reboot. On Apple Silicon
@@ -82,34 +124,41 @@ if ! docker info >/dev/null 2>&1; then
     colima start --vm-type vz --cpu 4 --memory 8 --disk 60
 fi
 
-if [[ $CLEAN -eq 1 ]]; then
-    say "Clean state: destroying containers and volumes"
+if [[ $MODE == clean ]]; then
+    step clean "Clean state: destroying containers and volumes"
     compose down -v --remove-orphans || true
     rm -rf dbt/target dbt/logs
 fi
 
 # --- services ----------------------------------------------------------------
-say "Starting Postgres and Metabase"
+step services "Starting Postgres and Metabase"
 compose up -d postgres metabase
 
-say "Waiting for Postgres"
+step services "Waiting for Postgres"
 until compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; do
     sleep 2
 done
 
-# --- data quality gate -------------------------------------------------------
-# Runs against the raw schema before any modelling, so a bad load fails here
-# rather than surfacing as a wrong number on the dashboard.
-say "Validating loaded data"
+# --- data --------------------------------------------------------------------
+if [[ $MODE == refresh ]]; then
+    # Reload inside a transaction so a failure leaves the previous data intact.
+    step refresh "Reloading raw data from CSVs"
+    compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+        -v ON_ERROR_STOP=1 -q -f /db/refresh.sql
+fi
+
+step "data quality" "Validating loaded data"
 compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
     -v ON_ERROR_STOP=1 -f /db/validate.sql
 
 # --- models ------------------------------------------------------------------
-say "Building dbt models"
+step "dbt build" "Building dbt models"
 (cd dbt && ../.venv/bin/dbt build --profiles-dir profiles)
 
-# --- dashboard ---------------------------------------------------------------
-say "Provisioning Metabase"
+# --- dashboards --------------------------------------------------------------
+step metabase "Provisioning Metabase"
 .venv/bin/python scripts/provision_metabase.py
 
-say "Ready - dashboard at http://localhost:3000"
+ELAPSED=$(( $(date +%s) - START_TS ))
+say "Ready in ${ELAPSED}s - dashboards at http://localhost:3000"
+printf '    log: %s\n' "$LOG"

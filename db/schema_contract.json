@@ -1,0 +1,252 @@
+{
+  "raw_acquisition_costs": {
+    "columns": [
+      {
+        "name": "cost_id",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "year_month",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "country_code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "channel",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "spend_amount",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "currency",
+        "type": "text",
+        "nullable": false
+      }
+    ],
+    "row_count": 768
+  },
+  "raw_markets": {
+    "columns": [
+      {
+        "name": "country_code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "country_name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "region",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "currency",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "eur_fx",
+        "type": "numeric",
+        "nullable": false
+      },
+      {
+        "name": "launch_year",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "vat_rate",
+        "type": "numeric",
+        "nullable": false
+      }
+    ],
+    "row_count": 8
+  },
+  "raw_merchants": {
+    "columns": [
+      {
+        "name": "merchant_id",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "merchant_name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "business_type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "country_code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "city",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "signup_date",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "plan_type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "churn_date",
+        "type": "date",
+        "nullable": true
+      }
+    ],
+    "row_count": 160
+  },
+  "raw_operating_costs": {
+    "columns": [
+      {
+        "name": "cost_id",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "year_month",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "cost_category",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "amount_eur",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "nullable": false
+      }
+    ],
+    "row_count": 144
+  },
+  "raw_products": {
+    "columns": [
+      {
+        "name": "sku",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "price_eur",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "cogs_eur",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "gross_margin_pct",
+        "type": "numeric",
+        "nullable": false
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "launched_at",
+        "type": "date",
+        "nullable": false
+      }
+    ],
+    "row_count": 5
+  },
+  "raw_subscriptions": {
+    "columns": [
+      {
+        "name": "subscription_id",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "merchant_id",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "plan_sku",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "start_date",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "end_date",
+        "type": "date",
+        "nullable": true
+      },
+      {
+        "name": "mrr_local",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "currency",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "cancellation_reason",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "previous_plan_sku",
+        "type": "text",
+        "nullable": true
+      }
+    ],
+    "row_count": 117
+  }
+}
