@@ -1,94 +1,95 @@
-# AI Onboarding — SaaS Analytics Platform
+# SaaS Analytics Platform — an AI-assisted development workshop
 
-A training project for data analysts learning AI-assisted development, plus the
-platform built from it.
+A hands-on training project for data analysts. You start with six CSV files and
+a spec, and finish with a working analytics platform **and a set of business
+conclusions you can defend**. Both halves matter — the pipeline is the means,
+not the goal.
 
-The repository is split so the starting point and the result can be read
-separately — and diffed against each other.
+## Getting started
 
-| Folder | What it is |
-|---|---|
-| **[`initial/`](initial/)** | The project exactly as issued: the dataset, the requirements, and the mentoring playbook. Nothing here was written during the build. |
-| **`final/`** | The working analytics platform built from it — Postgres, dbt and Metabase, containerized. |
+Open your coding agent in this directory and say **"I'm ready."** It will walk
+you through the project, explaining each step and checking you have understood
+before moving on. You do not need to read anything else first.
 
-> `final/` arrives in a companion pull request. Until that one merges, the links
-> to it below will not resolve.
+Works with any agent that reads `AGENTS.md` — Claude Code, Cursor, Codex,
+Copilot, Gemini CLI. Claude Code reads `CLAUDE.md`, which imports the same file.
 
----
-
-## `initial/` — the starting point
-
-Six CSVs describing **Invented Software**, a fictional B2B SaaS company selling
-business-management software to small merchants across 8 markets. Revenue is
-subscription-only: 160 merchants, 117 subscriptions, two years of costs.
-
-| File | Purpose |
-|---|---|
-| `saas/*.csv` | The dataset — merchants, subscriptions, products, markets, acquisition and operating costs |
-| `Requirements.md` | The full project spec: six phases, deliverables, architecture constraints |
-| `CLAUDE.md` | The mentoring playbook — how Claude is meant to teach the project |
-| `HANDOFF.md` | Setup notes, data conventions, and expected results to check models against |
-
-These files are **preserved unmodified**. The six CSVs are byte-identical to the
-ones the platform in `final/` reads, which matters because the dataset contains
-two deliberate problems that were solved in the models rather than patched in
-the data.
-
-## `final/` — the built platform
-
-```
-saas/*.csv → Postgres (raw) → dbt (25 models) → Metabase (2 dashboards, 18 cards)
-                    └──────── Docker Compose ────────┘
-```
+**Work on a copy**, so the original stays available to compare against:
 
 ```bash
-cd final && ./start.sh
+cp -r . ../workspace && cd ../workspace
 ```
 
-Cold start to live dashboards in about two and a half minutes. See
-`final/README.md` for detail and `final/docs/` for the business requirements,
-architecture decision records, database schema, operations manual and AI
-process report.
+Before Phase 3 you will need Docker and a container runtime — see
+[`prerequisites.md`](prerequisites.md). Nothing else is needed to start.
 
-All eleven SaaS KPIs are built: MRR, ARR, logo churn, revenue churn, NRR, LTV,
-CAC, CAC Payback, LTV:CAC, Gross Margin, Burn Multiple and Cash Runway.
+## The company
 
-## The two problems left in the data on purpose
+**Invented Software** sells business-management software to small merchants —
+cafés, bakeries, salons, florists, food trucks, gyms — across 8 markets.
 
-Both were found during discovery and resolved as **modelling decisions**, not by
-editing the CSVs. They are the most instructive thing in the dataset.
+Revenue is **subscription-only**: no transaction fees, no hardware, no payment
+processing. Every euro is recurring, which makes the standard SaaS metric stack
+the natural frame.
 
-**The cash ledger contradicts the P&L by €85,519.** Recorded cash rises across
-2024–25 while revenue minus costs implies a €3,253/month burn. Regression shows
-the cash series is a function of *time*, not of the business — monthly change is
-linear in `t` at R² = 0.971, correlating +0.985 with the clock and only +0.401
-with revenue. Burn is therefore derived from the P&L, with the divergence
-exposed per month rather than hidden.
+> **The company is fictional and the data is synthetic.** Invented Software does
+> not exist and every figure is generated. Treat the numbers as exercise
+> material — never as a benchmark or a claim about any real market.
 
-**CAC has no single honest answer.** The last merchant signed up 2024-06-29, yet
-€16,856 of acquisition spend is booked across 2025 — money that acquired nobody.
-Attributed CAC is €238.24 and blended CAC is €1,013.72, giving an LTV:CAC of
-**3.84 or 0.90** depending on which question you are asking. Both are reported.
-At 0.90 the blended ratio sits below 1.0, meaning that counting every euro
-spent, a customer costs more to win than they return.
+## The data
 
-A third of the dataset compounds it: 65 of the 160 merchants never held a
-subscription at all, so any metric that counts merchants rather than *paying*
-merchants is measuring the wrong population.
+Six tables in [`data/`](data/). A field-by-field description, including the join
+keys, is in [`data/README.md`](data/README.md).
 
-And one that catches almost everyone: `raw_operating_costs` files a cash
-*balance* in the same column as five genuine *cost* categories. An unfiltered
-`SUM` returns **€54,814/month against a true €3,419 — 16× too high**, and still
-looks like a plausible number.
+| Table | Rows | What it is |
+|---|---|---|
+| `raw_merchants` | 160 | The customers |
+| `raw_subscriptions` | 117 | Subscription periods — the only revenue source |
+| `raw_products` | 5 | Plans and add-ons, with price and cost |
+| `raw_markets` | 8 | Countries, currency, FX rate |
+| `raw_acquisition_costs` | 768 | Marketing spend by market and channel |
+| `raw_operating_costs` | 144 | Monthly P&L lines |
 
-> **Before grading anything against `initial/HANDOFF.md`, read
-> [`initial/ERRATA.md`](initial/ERRATA.md).** Four figures in its "expected
-> results" table are wrong — net burn, runway, logo churn and CAC — and the file
-> instructs the reader to treat that table as authoritative over their own
-> models. The errata corrects them without touching the shipped file, so the
-> byte-identical guarantee above still holds.
+**Money is stored in minor units** — `price_eur = 1900` means €19.00 — and some
+amounts are in local currency rather than euros. The details, and the join path
+that conversion requires, are in [`data/README.md`](data/README.md).
 
-## History
+The dataset is not tidy. Some of what you find will look wrong, and deciding
+what to do about it is part of the work rather than an obstacle to it. Where
+there is genuinely no single correct answer, say so in your write-up and defend
+the choice you made — that is the skill being taught.
 
-The two folders arrive as separate pull requests so the starting point and the
-solution stay legible independently.
+## What you will build
+
+```
+data/*.csv → database → dbt models → BI dashboard
+```
+
+Six phases, each with a written deliverable. The full spec, the architecture
+constraints and the canonical list of KPIs are in
+[`requirements.md`](requirements.md).
+
+| Phase | Deliverable |
+|---|---|
+| 1 · Data discovery | Business requirements document |
+| 2 · Architecture | Architecture decision record |
+| 3 · Database | Working database, data loaded and validated |
+| 4 · dbt modelling | Tested, documented models |
+| 5 · BI platform | Executive dashboard and drill-downs |
+| 6 · Automation | One-command startup and a refresh path |
+
+The documents are not paperwork. Each one is the proof that you understood the
+phase — the code alone is not.
+
+## Files
+
+| Path | What it is |
+|---|---|
+| `data/` | The six CSVs, plus a description of every field |
+| `requirements.md` | The spec: phases, deliverables, constraints, KPI list |
+| `prerequisites.md` | What to install, and when you will need it |
+| `AGENTS.md` | Instructions for the mentoring agent. You do not need to read it |
+| `data-guide.md` | Notes for the mentor. **Contains answers — skip it** |
+
+If something goes sideways, tell your agent "let's back up." The pace is yours
+to set.

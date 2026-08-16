@@ -7,9 +7,44 @@ Build a complete end-to-end analytics platform for **Invented Software**, a fict
 
 The company's revenue model is **subscription-only**: recurring monthly fees on software plans and add-ons. There is no transaction processing, no interchange, and no hardware — every euro of revenue is recurring, which makes the SaaS metric stack the natural analytical frame.
 
-**Dataset Location**: the `saas/` directory contains 6 CSV tables: merchants, subscriptions, products, markets, acquisition costs, and operating costs. Two years of data (2024–2025), 8 markets, 160 merchants, 117 subscription records.
+**Dataset location**: the `data/` directory contains 6 CSV tables: merchants,
+subscriptions, products, markets, acquisition costs, and operating costs. 8
+markets, 160 merchants, 117 subscription records.
 
-**Data conventions**: all money is stored in **minor units** (cents) — `price_eur = 1900` means €19.00. `mrr_local` and `spend_amount` are in **local currency** and must be converted via `raw_markets.eur_fx` (`amount_eur = amount_local * eur_fx`); operating costs are already in EUR.
+**Coverage is not uniform.** The two cost tables cover 2024–2025. The entity
+tables predate that: merchant signups run 2022-06 → 2024-06 (114 of 160 before
+2024) and subscriptions start 2022-06 → 2024-12 (75 of 117 before 2024). The
+reporting window and the entity history are not the same range — scoping one
+over the other drops most of the revenue.
+
+**Data conventions** are documented once, in [`data/README.md`](data/README.md),
+along with the field-level notes and the join keys. Read that before modelling;
+several of the conventions corrupt results silently if missed.
+
+### The KPI list
+
+**This is the canonical list.** Other documents link here rather than restating
+it. Phase 1 asks you to choose **three to five** of these and specify them
+precisely.
+
+| # | KPI | Notes |
+|---|---|---|
+| 1 | Monthly Recurring Revenue (MRR) | The spine. Everything else depends on it |
+| 2 | Annual Recurring Revenue (ARR) | MRR × 12 |
+| 3 | Logo Churn Rate | Customers lost. Mind the denominator |
+| 4 | Revenue Churn Rate | Euros lost — a different question from logo churn |
+| 5 | Net Revenue Retention (NRR) | Expansion minus contraction and churn |
+| 6 | Gross Profit Margin | Which cost source? There is more than one |
+| 7 | Customer Acquisition Cost (CAC) | Denominator matters as much as numerator |
+| 8 | Customer Lifetime Value (LTV) | Depends on a churn rate and a margin |
+| 9 | CAC Payback Period | Months of gross profit to repay acquisition |
+| 10 | LTV : CAC Ratio | Both halves must describe the same population |
+| 11 | Burn Multiple | Net burn ÷ net new ARR |
+| 12 | Cash Runway | Cash ÷ burn. Decide what counts as burn |
+
+Twelve entries. Several are ambiguous in ways the data will not resolve for you —
+that ambiguity is deliberate, and documenting the choice you made is part of the
+deliverable.
 
 ### Learning Objectives
 
@@ -27,9 +62,10 @@ By completing this project, you will demonstrate proficiency in:
 #### Phase 1: Data Discovery & Business Understanding
 **Deliverable**: Business requirements document
 
-**⚡ FIRST STEP**: Run `/init` to seed an initial CLAUDE.md if you're starting fresh elsewhere, then `git init` and a first commit so you have an undo history. Per-phase feature branches are optional — useful practice, not required for solo work.
-
-**Skills**: `/brainstorming` to refine the business questions before you document them.
+**⚡ FIRST STEP**: copy the project so the original stays available to compare
+against — `cp -r . ../workspace && cd ../workspace` — and commit as you go. This
+repository already ships an agent instruction file and git history; there is no
+need to generate either.
 
 - Analyze the provided dataset structure and relationships
 - Document business logic and key performance indicators
@@ -40,12 +76,14 @@ By completing this project, you will demonstrate proficiency in:
 **Deliverable**: Technical architecture document with AI research logs
 
 - Research and select appropriate database technology (PostgreSQL, MySQL, SQLite, etc.)
-- Research and select business intelligence platform (Lightdash, Grafana, Metabase, Apache Superset, etc.)
-- For each tool on your shortlist, check whether a public Claude Code skill, plugin, or MCP server exists for it (`/plugins`, marketplace, web search). A tool with mature skill support has a much shorter learning curve. Document discoveries in the ADR.
+- Research and select a business intelligence platform. Evaluate candidates
+  against criteria rather than reputation: self-hostable? open licence?
+  dbt-native semantic layer? containerisable? configurable from code, or
+  click-through only?
+- For each tool on your shortlist, check what assistance exists for it — an agent extension, an MCP server, an official container image, or nothing. A tool with good tooling around it has a much shorter learning curve. Record what you find in the ADR.
 - Document technology choices with AI-assisted research rationale
 - Create system architecture diagram
 
-**Skills**: `/brainstorming` for tool trade-offs, then `/writing-plans` for the setup plan.
 
 #### Phase 3: Database Implementation
 **Deliverable**: Functional database with imported data
@@ -55,18 +93,17 @@ By completing this project, you will demonstrate proficiency in:
 - Import CSV data with data quality validation
 - Create database documentation
 
-**Skills**: `/executing-plans` to work the Phase 2 plan; `/systematic-debugging` when things break.
 
 #### Phase 4: Data Modeling with dbt
 **Deliverable**: dbt project with analytical models
 
-- Initialize dbt project and configure database connection
+- Initialize a **dbt Core** project and configure the database connection. dbt
+  Cloud is a hosted service and is excluded by the local-deployment constraint
 - Develop staging models for raw data cleaning
 - Build dimensional models for analytical use cases
 - Implement data quality tests and documentation
 - Generate and review dbt docs
 
-**Skills**: `/test-driven-development` for dbt test design; `/executing-plans` for staging → marts work.
 
 #### Phase 5: Business Intelligence Platform (3-4 hours)
 **Deliverable**: Configured BI platform with dashboards
@@ -77,7 +114,6 @@ By completing this project, you will demonstrate proficiency in:
 - Create detailed operational reports
 - Implement user access and security
 
-**Skills**: `/executing-plans` for setup; `/requesting-code-review` once dashboards are wired up.
 
 #### Phase 6: System Integration & Automation
 **Deliverable**: Automated deployment scripts
@@ -87,7 +123,6 @@ By completing this project, you will demonstrate proficiency in:
 - Build error handling and monitoring
 - Create user documentation for system operation
 
-**Skills**: `/finishing-a-development-branch` when wrapping up; `/claude-automation-recommender` as a meta-exercise on the finished repo.
 
 ### Technical Requirements
 
@@ -98,8 +133,13 @@ By completing this project, you will demonstrate proficiency in:
 
 **Architecture Constraints**:
 - Open source technology stack only
-- Local deployment (no cloud SaaS solutions)
-- Containerize the entire stack with Docker Compose
+- Local deployment (no cloud SaaS solutions — this rules out dbt Cloud and any
+  hosted BI offering)
+- **Containerize the services** — database and BI platform — with Docker
+  Compose. dbt Core and the Python environment run on your machine and connect
+  to the containerized database over its published port; containerising dbt too
+  is allowed but not required. Nothing should require installing a database or
+  a BI tool directly on the host
 - Production-ready configuration
 - Scalable design patterns
 
@@ -126,7 +166,7 @@ By completing this project, you will demonstrate proficiency in:
 - Implement CI/CD pipeline for dbt models
 - Add automated testing for dashboard functionality
 - Create backup and recovery procedures
-- Run `/claude-automation-recommender` on the finished repo and propose two Claude Code automations (hook, subagent, or custom skill) that would improve the project workflow
+- Review the finished repository and propose two automations that would improve the workflow, whatever form your agent supports
 
 #### Advanced Visualizations (Optional)
 - Interactive drill-down capabilities
@@ -152,7 +192,7 @@ By completing this project, you will demonstrate proficiency in:
 #### 3. AI Development Process Report
 - Log of AI interactions and research queries
 - Documentation of how AI assisted in each phase
-- Log of which Claude Code skills you invoked, when, and which paid off most
+- Log of which agent capabilities you used, when, and which paid off most
 - Reflection on AI-assisted vs traditional development approaches
 - Recommendations for future AI-assisted projects
 
