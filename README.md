@@ -64,8 +64,14 @@ exposed per month rather than hidden.
 
 **CAC has no single honest answer.** The last merchant signed up 2024-06-29, yet
 €16,856 of acquisition spend is booked across 2025 — money that acquired nobody.
-Attributed CAC is €165.73 and blended CAC is €705.20, giving an LTV:CAC of
-**5.52 or 1.30** depending on which question you are asking. Both are reported.
+Attributed CAC is €238.24 and blended CAC is €1,013.72, giving an LTV:CAC of
+**3.84 or 0.90** depending on which question you are asking. Both are reported.
+At 0.90 the blended ratio sits below 1.0, meaning that counting every euro
+spent, a customer costs more to win than they return.
+
+A third of the dataset compounds it: 65 of the 160 merchants never held a
+subscription at all, so any metric that counts merchants rather than *paying*
+merchants is measuring the wrong population.
 
 ## History
 
