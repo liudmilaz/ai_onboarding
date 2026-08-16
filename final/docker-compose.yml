@@ -1,3 +1,8 @@
+# Explicit project name: Compose otherwise derives it from the directory,
+# so moving this folder would orphan the volumes and silently start a
+# second, empty stack alongside the first.
+name: invented_software
+
 # Credentials come from .env, which is gitignored. ./start.sh generates it with
 # random passwords on first run, and Compose picks it up automatically because
 # it sits alongside this file. Nothing here carries a secret literal.
