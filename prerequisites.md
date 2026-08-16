@@ -8,19 +8,21 @@ and your agent. Phase 3 is where software gets installed.
 
 An agent that reads `AGENTS.md`, and the CSVs in `data/`. That is all.
 
-## Phase 3 onward — containers
+## Phase 3 onward — a container runtime, and nothing else
 
-The project asks for the stack to be **containerized**, so you install a
-container runtime and everything else comes up inside it. You do **not** install
-a database, dbt or a BI tool on your machine — that is the point of the
-constraint.
+The project asks for the **entire stack** to be containerized. You install a
+container runtime; everything else — database, dbt, BI platform — comes up
+inside it. You do **not** install a database, dbt, Python or a BI tool on your
+machine. That is the whole point of the constraint: the deliverable has to work
+for someone who has none of your local setup.
 
 | Requirement | Check | If missing |
 |---|---|---|
 | Docker CLI | `docker --version` | `brew install docker` (macOS) or your package manager |
 | Compose | `docker compose version` | `brew install docker-compose` |
 | A container runtime | `docker info` | See below |
-| Python 3.9+ | `python3 --version` | Ships with macOS; otherwise your package manager |
+
+That is the complete list.
 
 ### Choosing a runtime
 
@@ -38,23 +40,21 @@ Without `--vm-type vz` it falls back to QEMU, and if QEMU is not installed it
 **hangs silently** rather than reporting an error. The VM also does not survive
 a reboot, so expect to start it at the beginning of a session.
 
-### dbt: Core, not Cloud
+### dbt: Core, in a container
 
-Use **dbt Core**, the open-source command-line tool, installed with the adapter
-for whichever database you choose — `dbt-postgres`, `dbt-duckdb` and so on. dbt
-Cloud is a hosted SaaS product and is ruled out by the local-deployment
-constraint.
+Use **dbt Core**, the open-source command-line tool. dbt Cloud is a hosted SaaS
+product and is ruled out by the local-deployment constraint.
 
-Install it in a virtual environment rather than globally:
+**Run it as a service, not from a virtual environment.** Official images exist
+per adapter (`dbt-postgres`, `dbt-duckdb` and so on), or you can build a small
+image from `python:slim`. Either way it joins the compose network and reaches
+the database by its **service name** — not `localhost`, which inside a container
+means the container itself.
 
-```bash
-python3 -m venv .venv
-.venv/bin/pip install dbt-postgres      # or the adapter you picked in Phase 2
-```
-
-dbt runs on your machine and connects to the containerized database over its
-published port. It does **not** need to run inside a container itself, though
-you may choose to.
+The temptation is to `pip install dbt-postgres` locally because it is two
+minutes faster. Resist it: a host-installed dependency is exactly the kind of
+step that works on your machine and fails on the next person's, which is what
+the constraint exists to prevent.
 
 ## Agent capabilities
 

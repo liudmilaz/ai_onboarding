@@ -105,7 +105,8 @@ need to generate either.
 **Deliverable**: dbt project with analytical models
 
 - Initialize a **dbt Core** project and configure the database connection. dbt
-  Cloud is a hosted service and is excluded by the local-deployment constraint
+  Cloud is a hosted service and is excluded by the local-deployment constraint.
+  dbt runs **in a container**, reaching the database by its compose service name
 - Develop staging models for raw data cleaning
 - Build dimensional models for analytical use cases
 - Implement data quality tests and documentation
@@ -142,11 +143,17 @@ need to generate either.
 - Open source technology stack only
 - Local deployment (no cloud SaaS solutions — this rules out dbt Cloud and any
   hosted BI offering)
-- **Containerize the services** — database and BI platform — with Docker
-  Compose. dbt Core and the Python environment run on your machine and connect
-  to the containerized database over its published port; containerising dbt too
-  is allowed but not required. Nothing should require installing a database or
-  a BI tool directly on the host
+- **Containerize the entire stack** with Docker Compose — database, dbt and the
+  BI platform. The deliverable is a **reproducible package**: someone who has
+  only a container runtime clones the repository, runs one command, and gets a
+  working platform. Nothing else should need installing on the host — no
+  database, no Python environment, no dbt, no BI tool.
+
+  Concretely, that means dbt runs as a service against the database over the
+  compose network rather than from a virtual environment on your machine, and
+  anything that provisions the BI tool runs in a container too. Reproducibility
+  is the point: a host-installed dependency is a step that works on your machine
+  and fails on someone else's
 - Production-ready configuration
 - Scalable design patterns
 
