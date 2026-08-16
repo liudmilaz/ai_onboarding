@@ -166,11 +166,16 @@ Only the first tells them apart. A trainee who picks exclusive passes two of the
 three checks and ships a series wrong in 8 of 24 months — with every reason to
 trust it. Proration fails both of the first two (Jan 1,081.70; Dec 1,637.09).
 
-**`raw_products.type` disagrees with the prose.** Revenue is described everywhere
-as subscription-only, but only SW-001 is typed `subscription`; SW-002 (€9.00) and
-SW-005 (€9.99) are recurring plans typed `software`. Filtering
-`type = 'subscription'` drops Dec-2025 MRR from €1,509.78 to €1,083.00 — **28.3%
-of revenue, with no error.**
+**`raw_products.type` is a label, not a classifier.** All three revenue-bearing
+SKUs are recurring, but only SW-001 is typed `subscription`; SW-002 (€9.00) and
+SW-005 (€9.99) are typed `software`. Filtering `type = 'subscription'` drops
+Dec-2025 MRR from €1,509.78 to €1,083.00 — **28.3% of that month, 30.6% across
+the whole series, with no error.**
+
+The docs now say revenue is *recurring* and warn that the column does not encode
+that, so this is a documented quirk rather than a contradiction — but it still
+catches anyone who trusts a category column without checking a total against an
+anchor. That is the lesson; do not pre-empt it.
 
 **`previous_plan_sku` is not a foreign key.** All 9 populated rows read `free`,
 which is a `plan_type` value, not a `raw_products.sku`. A relationships test

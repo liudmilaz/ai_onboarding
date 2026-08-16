@@ -82,7 +82,7 @@ The convention: **a subscription is active for the whole month containing its
 | Column | Notes |
 |---|---|
 | `sku` | PK |
-| `type` | `subscription` or `software`. **Only SW-001 is typed `subscription`** — SW-002 and SW-005 are recurring plans typed `software`, so filtering on `type = 'subscription'` silently drops 28% of revenue |
+| `type` | A catalogue label, **not a reliable revenue classifier.** Only SW-001 is typed `subscription`; SW-002 and SW-005 are recurring plans typed `software`. Filtering `type = 'subscription'` silently drops **30.6%** of revenue. Derive revenue-bearing SKUs from `raw_subscriptions` instead |
 | `price_eur`, `cogs_eur` | Minor units. **SW-003 and SW-004 are free** (`price_eur = 0`) |
 | `gross_margin_pct` | Pre-computed. Averaging it across all five SKUs gives 51.5% because the two free plans store `0.0` |
 

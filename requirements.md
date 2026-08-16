@@ -5,7 +5,14 @@
 
 Build a complete end-to-end analytics platform for **Invented Software**, a fictional B2B SaaS company selling business-management software to small merchants — using AI-assisted development practices. This project simulates real-world data engineering and business intelligence workflows while teaching modern development practices with AI tooling.
 
-The company's revenue model is **subscription-only**: recurring monthly fees on software plans and add-ons. There is no transaction processing, no interchange, and no hardware — every euro of revenue is recurring, which makes the SaaS metric stack the natural analytical frame.
+The company's revenue model is **entirely recurring**: monthly fees on software
+plans and add-ons. There is no transaction processing, no interchange and no
+hardware, which makes the SaaS metric stack the natural analytical frame.
+
+Note that `raw_products.type` does **not** reliably distinguish recurring
+revenue — it is a catalogue label that has drifted from what the products
+actually are. Derive the revenue-bearing SKUs from `raw_subscriptions` rather
+than trusting the column.
 
 **Dataset location**: the `data/` directory contains 6 CSV tables: merchants,
 subscriptions, products, markets, acquisition costs, and operating costs. 8

@@ -28,9 +28,14 @@ Before Phase 3 you will need Docker and a container runtime — see
 **Invented Software** sells business-management software to small merchants —
 cafés, bakeries, salons, florists, food trucks, gyms — across 8 markets.
 
-Revenue is **subscription-only**: no transaction fees, no hardware, no payment
-processing. Every euro is recurring, which makes the standard SaaS metric stack
-the natural frame.
+**All revenue is recurring** — monthly fees on software plans and add-ons.
+There are no transaction fees, no hardware and no payment processing, which
+makes the standard SaaS metric stack the natural frame.
+
+The product catalogue does not cleanly encode this: `raw_products.type` is not a
+reliable way to tell recurring revenue from anything else, and filtering on it
+will quietly cost you money. Work out which SKUs carry revenue from
+`raw_subscriptions` instead, and check your total against a figure you trust.
 
 > **The company is fictional and the data is synthetic.** Invented Software does
 > not exist and every figure is generated. Treat the numbers as exercise
