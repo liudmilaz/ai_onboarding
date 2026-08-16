@@ -1,0 +1,25 @@
+name: invented_software
+version: "1.0.0"
+config-version: 2
+
+profile: invented_software
+
+model-paths: ["models"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  invented_software:
+    staging:
+      # Tables rather than views throughout: the dataset is small (the spine is
+      # ~3,200 rows) so the storage cost is nil, and materialising makes every
+      # layer independently inspectable in Metabase.
+      +materialized: table
+      +schema: staging
+    intermediate:
+      +materialized: table
+      +schema: intermediate
+    marts:
+      +materialized: table
+      +schema: marts

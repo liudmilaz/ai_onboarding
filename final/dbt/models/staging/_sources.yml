@@ -1,0 +1,24 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: >
+      Landing zone, one table per CSV in saas/. Money is in minor units (cents);
+      mrr_local and spend_amount are in local currency.
+
+      These resolve to the raw schema in Postgres, created by db/init/02_schema.sql
+      and populated by db/init/03_load.sql when the container first initialises.
+    tables:
+      - name: raw_markets
+      - name: raw_products
+      - name: raw_merchants
+      - name: raw_subscriptions
+      - name: raw_acquisition_costs
+      - name: raw_operating_costs
+        description: >
+          NB: this table mixes a stock in with the flows. cost_category =
+          'cash_balance_eom' is an end-of-month BALANCE sitting in the same
+          amount_eur column as the five real cost categories. Summing without
+          filtering returns ~16x the true monthly cost. Split downstream into
+          stg_operating_costs (flows) and stg_cash_balances (stock).

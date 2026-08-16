@@ -1,0 +1,170 @@
+version: 2
+
+models:
+  # ---------------------------------------------------------------- dimensions
+  - name: dim_date
+    description: Conformed date dimension at month grain. Every fact joins to this.
+    columns:
+      - name: date_month
+        tests: [unique, not_null]
+
+  - name: dim_merchant
+    description: Merchant dimension, Type 1. One row per merchant.
+    columns:
+      - name: merchant_id
+        tests: [unique, not_null]
+      - name: country_code
+        tests:
+          - not_null
+          - relationships: {to: ref('dim_market'), field: country_code}
+
+  - name: dim_product
+    description: Product catalogue - subscription plans and software add-ons.
+    columns:
+      - name: sku
+        tests: [unique, not_null]
+
+  - name: dim_market
+    description: >
+      Market dimension. eur_fx is present for traceability only; monetary
+      measures on the facts are already converted to EUR in staging.
+    columns:
+      - name: country_code
+        tests: [unique, not_null]
+
+  # --------------------------------------------------------------------- facts
+  - name: fct_subscription_month
+    description: >
+      Periodic snapshot. Grain: one row per subscription per active month.
+      mrr_eur is SEMI-ADDITIVE - it sums across merchants, products and markets
+      but not across time.
+    columns:
+      - name: date_month
+        tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_month}
+      - name: merchant_id
+        tests:
+          - not_null
+          - relationships: {to: ref('dim_merchant'), field: merchant_id}
+      - name: plan_sku
+        tests:
+          - not_null
+          - relationships: {to: ref('dim_product'), field: sku}
+      - name: country_code
+        tests:
+          - relationships: {to: ref('dim_market'), field: country_code}
+      - name: mrr_eur
+        tests: [not_null]
+
+  - name: fct_acquisition_spend
+    description: "Transaction fact. Grain: month x market x channel. spend_eur is fully additive."
+    columns:
+      - name: acquisition_cost_id
+        tests: [unique, not_null]
+      - name: date_month
+        tests:
+          - relationships: {to: ref('dim_date'), field: date_month}
+      - name: country_code
+        tests:
+          - relationships: {to: ref('dim_market'), field: country_code}
+
+  - name: fct_operating_cost
+    description: >
+      Transaction fact. Grain: month x cost category. Excludes cash_balance_eom,
+      which is a non-additive stock and lives in fct_cash_balance.
+    columns:
+      - name: operating_cost_id
+        tests: [unique, not_null]
+      - name: cost_category
+        tests:
+          - accepted_values:
+              values: [cost_of_revenue, sales_and_marketing, research_development,
+                       general_administrative, infrastructure]
+
+  - name: fct_cash_balance
+    description: >
+      Periodic snapshot, one row per month. SEMI-ADDITIVE - only last() is
+      meaningful. KNOWN DEFECT: this series contradicts the P&L and is a
+      function of time rather than of the business. See the model header.
+    columns:
+      - name: date_month
+        tests: [unique, not_null]
+
+  # ------------------------------------------------------------- metric marts
+  - name: mart_mrr_monthly
+    description: "KPI: MRR and ARR by month, with growth and ARPA."
+    columns:
+      - name: date_month
+        tests: [unique, not_null]
+      - name: mrr_eur
+        tests: [not_null]
+
+  - name: mart_gross_margin_monthly
+    description: "KPI: gross profit margin by month."
+    columns:
+      - name: date_month
+        tests: [unique, not_null]
+
+  - name: mart_churn_monthly
+    description: "KPI: logo churn by month."
+    columns:
+      - name: date_month
+        tests: [unique, not_null]
+
+  - name: mart_revenue_movement
+    description: "KPI: MRR waterfall, yielding NRR and gross revenue churn."
+    columns:
+      - name: date_month
+        tests: [unique, not_null]
+      - name: ending_mrr_eur
+        tests: [not_null]
+
+  - name: mart_cac_monthly
+    description: >
+      "KPI: CAC by month. NULL in months with no signups - undefined, not
+      infinite. Unattributed spend is surfaced separately."
+    columns:
+      - name: date_month
+        tests: [unique, not_null]
+      - name: new_merchants
+        tests: [not_null]
+
+  - name: mart_burn_monthly
+    description: >
+      "KPI: burn, Burn Multiple and Cash Runway. Burn is derived from the P&L,
+      not the disputed cash ledger."
+    columns:
+      - name: date_month
+        tests: [unique, not_null]
+      - name: net_cash_flow_eur
+        tests: [not_null]
+
+  - name: mart_unit_economics
+    description: >
+      "KPI: LTV, CAC, CAC Payback and LTV:CAC. Single-row scorecard. ltv_eur is
+      deliberately nullable: with zero observed churn there is no defensible
+      lifetime, and reporting a capped 60 months would be a fabricated number."
+    columns:
+      - name: arpa_eur
+        tests: [not_null]
+
+  # -------------------------------------------------------------- intermediate
+  - name: int_months
+    columns:
+      - name: month_start
+        tests: [unique, not_null]
+
+  - name: int_subscription_months
+    description: The spine - one row per subscription per active month.
+    columns:
+      - name: month_start
+        tests: [not_null]
+      - name: mrr_eur
+        tests: [not_null]
+
+  - name: int_merchant_months
+    description: Subscription spine rolled up to merchant grain for revenue movement.
+    columns:
+      - name: month_start
+        tests: [not_null]

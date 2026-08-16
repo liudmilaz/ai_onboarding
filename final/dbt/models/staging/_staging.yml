@@ -1,0 +1,72 @@
+version: 2
+
+models:
+  - name: stg_markets
+    columns:
+      - name: country_code
+        tests: [unique, not_null]
+      - name: eur_fx
+        tests: [not_null]
+
+  - name: stg_products
+    columns:
+      - name: sku
+        tests: [unique, not_null]
+      - name: product_type
+        tests:
+          - accepted_values: {values: ["subscription", "software"]}
+
+  - name: stg_merchants
+    columns:
+      - name: merchant_id
+        tests: [unique, not_null]
+      - name: country_code
+        tests:
+          - not_null
+          - relationships: {to: ref('stg_markets'), field: country_code}
+      - name: status
+        tests:
+          - accepted_values: {values: ["active", "churned"]}
+
+  - name: stg_subscriptions
+    columns:
+      - name: subscription_id
+        tests: [unique, not_null]
+      - name: merchant_id
+        tests:
+          - not_null
+          - relationships: {to: ref('stg_merchants'), field: merchant_id}
+      - name: plan_sku
+        tests:
+          - not_null
+          - relationships: {to: ref('stg_products'), field: sku}
+      - name: mrr_eur
+        tests: [not_null]
+
+  - name: stg_operating_costs
+    description: Flows only - the cash_balance_eom stock is excluded here.
+    columns:
+      - name: cost_id
+        tests: [unique, not_null]
+      - name: cost_category
+        tests:
+          - accepted_values:
+              values:
+                - cost_of_revenue
+                - sales_and_marketing
+                - research_development
+                - general_administrative
+                - infrastructure
+
+  - name: stg_cash_balances
+    description: The stock half of raw_operating_costs, isolated so it cannot be summed with the flows.
+    columns:
+      - name: month_start
+        tests: [unique, not_null]
+
+  - name: stg_acquisition_costs
+    columns:
+      - name: cost_id
+        tests: [unique, not_null]
+      - name: spend_eur
+        tests: [not_null]
