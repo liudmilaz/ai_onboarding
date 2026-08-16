@@ -9,7 +9,10 @@ separately — and diffed against each other.
 | Folder | What it is |
 |---|---|
 | **[`initial/`](initial/)** | The project exactly as issued: the dataset, the requirements, and the mentoring playbook. Nothing here was written during the build. |
-| **[`final/`](final/)** | The working analytics platform built from it — Postgres, dbt and Metabase, containerized. |
+| **`final/`** | The working analytics platform built from it — Postgres, dbt and Metabase, containerized. |
+
+> `final/` arrives in a companion pull request. Until that one merges, the links
+> to it below will not resolve.
 
 ---
 
@@ -42,10 +45,10 @@ saas/*.csv → Postgres (raw) → dbt (25 models) → Metabase (2 dashboards, 18
 cd final && ./start.sh
 ```
 
-Cold start to live dashboards in about four minutes. See
-[`final/README.md`](final/README.md) for detail and
-[`final/docs/`](final/docs/) for the business requirements, architecture
-decision records, database schema, operations manual and AI process report.
+Cold start to live dashboards in about two and a half minutes. See
+`final/README.md` for detail and `final/docs/` for the business requirements,
+architecture decision records, database schema, operations manual and AI
+process report.
 
 All eleven SaaS KPIs are built: MRR, ARR, logo churn, revenue churn, NRR, LTV,
 CAC, CAC Payback, LTV:CAC, Gross Margin, Burn Multiple and Cash Runway.
@@ -72,6 +75,18 @@ spent, a customer costs more to win than they return.
 A third of the dataset compounds it: 65 of the 160 merchants never held a
 subscription at all, so any metric that counts merchants rather than *paying*
 merchants is measuring the wrong population.
+
+And one that catches almost everyone: `raw_operating_costs` files a cash
+*balance* in the same column as five genuine *cost* categories. An unfiltered
+`SUM` returns **€54,814/month against a true €3,419 — 16× too high**, and still
+looks like a plausible number.
+
+> **Before grading anything against `initial/HANDOFF.md`, read
+> [`initial/ERRATA.md`](initial/ERRATA.md).** Four figures in its "expected
+> results" table are wrong — net burn, runway, logo churn and CAC — and the file
+> instructs the reader to treat that table as authoritative over their own
+> models. The errata corrects them without touching the shipped file, so the
+> byte-identical guarantee above still holds.
 
 ## History
 
