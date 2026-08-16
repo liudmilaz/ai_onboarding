@@ -42,7 +42,10 @@ The stack is **Postgres + dbt + Metabase, containerized with Docker Compose**. O
 ./start.sh
 ```
 
-It creates a Python environment if missing, starts Colima and the containers, waits for Postgres, runs the data-quality gate in `db/validate.sql`, builds the dbt models, then provisions Metabase — admin user, database connection, five cards and the executive dashboard at <http://localhost:3000/dashboard/2>.
+It creates a Python environment if missing, starts Colima and the containers, waits for Postgres, runs the data-quality gate in `db/validate.sql`, builds the dbt models, then provisions Metabase — admin user, database connection, a collection, a read-only analyst group, and two dashboards:
+
+- **Executive** — <http://localhost:3000/dashboard/2>: MRR/ARR, NRR, gross margin, logo churn, net burn, LTV:CAC, runway, unit-economics scorecard
+- **Operational** — <http://localhost:3000/dashboard/3>: drill-downs by market, business type, plan and channel, the MRR waterfall, CAC by month, and the ledger-vs-P&L divergence
 
 ```bash
 ./start.sh --clean
@@ -50,9 +53,9 @@ It creates a Python environment if missing, starts Colima and the containers, wa
 
 Destroys the containers and volumes first, so the run proves a genuine cold start.
 
-**Verified end to end**: from `docker compose down -v` to a live dashboard in **210 seconds**, with `dbt build` reporting `PASS=55 ERROR=0`. The marts reproduce the figures in `HANDOFF.md` §4 exactly — MRR €1,138 / €1,641 / €1,510 and exit ARR €18,117.
+**Verified end to end**: from `docker compose down -v` to live dashboards in **261 seconds**, with `dbt build` reporting `PASS=102 ERROR=0` across 25 models and 77 tests, and **18 of 18 dashboard cards returning data**. The marts reproduce the figures in `HANDOFF.md` §4 exactly — MRR €1,138 / €1,641 / €1,510 and exit ARR €18,117.
 
-Re-running is safe: cards and the dashboard are matched by name and reused rather than duplicated, and Metabase's bundled H2 sample database is removed during provisioning.
+Re-running is safe: cards and dashboards are matched by name and **updated** to match the definitions in `scripts/provision_metabase.py`, cards no longer defined are archived, and Metabase's bundled H2 sample database is removed.
 
 Credentials are generated into `.env` on first run (gitignored). The Metabase login is printed at the end of `./start.sh`; the email defaults to `analyst@invented.software`.
 
@@ -68,8 +71,47 @@ Three environment details this stack depends on, each of which cost time to find
 |---|---|
 | `dbt/models/staging/` | One model per raw table. Minor units and local currency are converted here and nowhere else. |
 | `dbt/models/intermediate/` | `int_subscription_months` — the spine: 117 subscription periods exploded to one row per subscription per active month. |
-| `dbt/models/marts/` | MRR/ARR, gross margin, logo churn. |
+| `docs/` | Business requirements, ADRs, database schema, AI process report. |
+| `dbt/models/marts/` | Kimball star — `dim_*` conformed dimensions, `fct_*` facts with declared grain and additivity, `mart_*` KPI models. |
 | `dbt/tests/` | `assert_known_kpi_values` pins the figures published in `HANDOFF.md` §4 as a regression anchor; `assert_source_integrity` checks row counts and the rules generic tests can't express. |
 | `db/` | Postgres schema, CSV loaders, and the data-quality gate run before modelling. |
 | `scripts/` | Metabase provisioning. |
 | `docker-compose.yml` | Postgres 16 and Metabase, with healthchecks gating startup order. |
+
+## The eleven KPIs
+
+| KPI | Model |
+|---|---|
+| MRR, ARR | `mart_mrr_monthly` |
+| Gross Profit Margin | `mart_gross_margin_monthly` |
+| Churn Rate (logo) | `mart_churn_monthly` |
+| Churn Rate (revenue), NRR | `mart_revenue_movement` |
+| CAC | `mart_cac_monthly` |
+| LTV, CAC Payback, LTV:CAC | `mart_unit_economics` |
+| Burn Multiple, Cash Runway | `mart_burn_monthly` |
+
+Two carry deliberate caveats, both documented in the models and in
+`docs/business_requirements.md`:
+
+- **CAC is reported twice.** Attributed (€165.73, using the 23.5% of spend that
+  fell in months with signups) and blended (€705.20, counting every euro). They
+  give LTV:CAC of 5.52 and **1.30** respectively — the blended figure is the one
+  to act on.
+- **Burn is derived from the P&L, not the cash ledger.** The recorded
+  `cash_balance_eom` series contradicts the P&L by €85,519 and is a function of
+  time rather than of the business (R² = 0.971 against a linear trend). See
+  `docs/business_requirements.md` §Q7a.
+
+## Documentation
+
+```bash
+cd dbt && ../.venv/bin/dbt docs generate --profiles-dir profiles
+../.venv/bin/dbt docs serve --profiles-dir profiles     # lineage graph, tests, columns
+```
+
+| Document | Contents |
+|---|---|
+| `docs/business_requirements.md` | Business questions, calculation specs, data conventions |
+| `docs/adr.md` | Seven architecture decision records with consequences |
+| `docs/database_schema.md` | All 31 tables, generated from `information_schema` |
+| `docs/ai_process_report.md` | How this was built with AI, including what failed |
