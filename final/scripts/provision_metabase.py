@@ -29,7 +29,12 @@ READONLY_GROUP = "Analysts (read-only)"
 def call(path, data=None, method=None, session=None):
     url = f"{BASE}{path}"
     body = json.dumps(data).encode() if data is not None else None
-    req = urllib.request.Request(url, data=body, method=method or ("POST" if data else "GET"))
+    # `data is not None`, not truthiness: an empty dict is a legitimate JSON
+    # body. Using `if data` sent POST-only endpoints (sync_schema) as GET with
+    # a body attached, which Metabase 404s. That was masked because Metabase
+    # auto-syncs a newly created database - it only bit on re-runs.
+    req = urllib.request.Request(
+        url, data=body, method=method or ("POST" if data is not None else "GET"))
     req.add_header("Content-Type", "application/json")
     if session:
         req.add_header("X-Metabase-Session", session)
@@ -72,8 +77,19 @@ def get_session():
 
 
 def ensure_database(session):
+    details = {
+        "host": "postgres", "port": 5432, "dbname": PG_DB,
+        "user": PG_USER, "password": PG_PASSWORD, "ssl": False,
+        "schema-filters-type": "all",
+    }
     for db in call("/api/database", session=session).get("data", []):
         if db["name"] == DB_NAME:
+            # Push credentials on every run. Returning early here meant that
+            # after a password rotation Metabase kept the stale password and
+            # every card broke, while provisioning still printed success.
+            call(f"/api/database/{db['id']}",
+                 {"engine": "postgres", "name": DB_NAME, "details": details},
+                 method="PUT", session=session)
             return db["id"]
     db = call("/api/database", {
         "engine": "postgres",
@@ -129,12 +145,21 @@ def remove_sample_content(session):
             print(f"  removed sample database (id {db['id']})", flush=True)
 
 
-def existing_by_name(session, path, name):
+def existing_by_name(session, path, name, collection_id="__any__"):
+    """Find an item by name, scoped to a collection unless told otherwise.
+
+    Scoping matters: unscoped, this matched a trainee's own saved question with
+    the same name and the provisioner then overwrote or archived it. Only
+    objects inside the collection this script owns are fair game.
+    """
     items = call(path, session=session)
     rows = items.get("data", items) if isinstance(items, dict) else items
     for it in rows:
-        if it.get("name") == name and not it.get("archived"):
-            return it["id"]
+        if it.get("name") != name or it.get("archived"):
+            continue
+        if collection_id != "__any__" and it.get("collection_id") != collection_id:
+            continue
+        return it["id"]
     return None
 
 
@@ -154,7 +179,7 @@ def upsert_card(session, db_id, name, sql, display, viz, collection_id):
         "visualization_settings": viz or {},
         "collection_id": collection_id,
     }
-    card_id = existing_by_name(session, "/api/card", name)
+    card_id = existing_by_name(session, "/api/card", name, collection_id)
     if card_id is None:
         return call("/api/card", body, session=session)["id"], "created"
     call(f"/api/card/{card_id}", body, method="PUT", session=session)
@@ -305,7 +330,7 @@ def ensure_collection(session, name):
 
 
 def build_dashboard(session, db_id, collection_id, name, description, cards):
-    dash_id = existing_by_name(session, "/api/dashboard", name)
+    dash_id = existing_by_name(session, "/api/dashboard", name, collection_id)
     if dash_id is None:
         dash_id = call("/api/dashboard", {
             "name": name, "description": description, "collection_id": collection_id,
@@ -325,16 +350,19 @@ def build_dashboard(session, db_id, collection_id, name, description, cards):
     return dash_id
 
 
-def archive_orphaned_cards(session, defined_names):
-    """Archive cards this script no longer defines.
+def archive_orphaned_cards(session, defined_names, collection_id):
+    """Archive cards this script no longer defines, WITHIN its own collection.
 
-    Without this, a card dropped from a dashboard definition lingers in the
-    question list forever - and if the models moved underneath it, it lingers
-    BROKEN. Provisioning owns these cards, so it has to clean up after itself.
+    Without this a card dropped from a definition lingers forever, and if the
+    models moved underneath it, it lingers broken. But the sweep must be scoped:
+    unscoped it walked every card in the instance and deleted anything it did
+    not recognise, including a trainee's own saved questions.
     """
     for card in call("/api/card", session=session):
         if card.get("archived") or card["name"] in defined_names:
             continue
+        if card.get("collection_id") != collection_id:
+            continue          # not ours - leave it alone
         call(f"/api/card/{card['id']}", {"archived": True}, method="PUT", session=session)
         print(f"  archived orphaned card: {card['name']}", flush=True)
 
@@ -385,7 +413,7 @@ def main():
         ids.append(build_dashboard(session, db_id, collection_id, name, description, cards))
 
     archive_orphaned_cards(
-        session, {c[0] for _, _, cards in DASHBOARDS for c in cards})
+        session, {c[0] for _, _, cards in DASHBOARDS for c in cards}, collection_id)
     configure_permissions(session, db_id)
 
     print("")

@@ -89,6 +89,13 @@ METABASE_PASSWORD=${mb_pw}
 EOF
     chmod 600 .env
     printf '    credentials written to .env (chmod 600, gitignored)\n'
+    # A generated .env is only valid against a fresh volume. Postgres bakes the
+    # password in at initdb time, so a pre-existing volume still holds the old
+    # one and every later step fails with an opaque auth error.
+    if docker volume ls --format '{{.Name}}' 2>/dev/null | grep -q '^invented_software_pgdata$'; then
+        fail "Generated a new .env but volume invented_software_pgdata already exists with the previous password.
+   Either restore the old .env, or discard the data:  ./start.sh --clean"
+    fi
 fi
 
 # Export for dbt's env_var() and the provisioning script. Compose reads .env
@@ -135,7 +142,17 @@ step services "Starting Postgres and Metabase"
 compose up -d postgres metabase
 
 step services "Waiting for Postgres"
-until compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; do
+# Bounded: an unbounded `until` loop hangs forever on a crash-looping Postgres,
+# and because the failure lives in a loop CONDITION the ERR trap never fires -
+# so the script would sit silent rather than printing the log path and hints.
+for attempt in $(seq 1 60); do
+    if compose exec -T postgres pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+        break
+    fi
+    if [[ $attempt -eq 60 ]]; then
+        compose logs --tail=30 postgres || true
+        fail "Postgres did not become ready within 120s (logs above, full log: $LOG)"
+    fi
     sleep 2
 done
 

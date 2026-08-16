@@ -15,8 +15,19 @@ with spend as (
 
 ), signups as (
 
-    select signup_month as date_month, count(*) as new_merchants
-    from {{ ref('dim_merchant') }}
+    -- Acquired customers, not signups. 65 of the 160 merchants never held a
+    -- subscription; in the 2024-25 window only 32 of 46 signups became paying
+    -- customers. Dividing spend by all 46 understates CAC by 44%, and it makes
+    -- LTV:CAC incoherent because LTV is built from ARPA over PAYING merchants.
+    -- Both halves of that ratio have to describe the same population.
+    select
+        m.signup_month                                          as date_month,
+        count(*) filter (where sub.merchant_id is not null)     as new_merchants,
+        count(*)                                                as signups
+    from {{ ref('dim_merchant') }} m
+    left join (
+        select distinct merchant_id from {{ ref('fct_subscription_month') }}
+    ) sub on m.merchant_id = sub.merchant_id
     group by 1
 
 )
@@ -25,6 +36,7 @@ select
     d.date_month,
     s.acquisition_spend_eur,
     coalesce(g.new_merchants, 0)                    as new_merchants,
+    coalesce(g.signups, 0)                          as signups,
 
     -- CAC is NULL for two distinct reasons, and conflating them would lie:
     --   no spend data   -> months before 2024-01, where spend was never reported.

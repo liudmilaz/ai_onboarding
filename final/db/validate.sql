@@ -46,3 +46,57 @@ select
           / 100.0, 2)                                                       as true_costs_eur
 from raw.raw_operating_costs
 group by 1 order by 1 limit 3;
+
+-- ---------------------------------------------------------------------------
+-- The checks above only PRINT. psql exits 0 on a successful SELECT no matter
+-- what it returned, so ON_ERROR_STOP had nothing to stop on and a corrupt load
+-- sailed through to dbt and Metabase. This block is what actually gates.
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+    problems text := '';
+    n bigint;
+BEGIN
+    SELECT count(*) INTO n FROM raw.raw_merchants;
+    IF n <> 160 THEN problems := problems || format('raw_merchants=%s (want 160); ', n); END IF;
+    SELECT count(*) INTO n FROM raw.raw_subscriptions;
+    IF n <> 117 THEN problems := problems || format('raw_subscriptions=%s (want 117); ', n); END IF;
+    SELECT count(*) INTO n FROM raw.raw_products;
+    IF n <> 5   THEN problems := problems || format('raw_products=%s (want 5); ', n); END IF;
+    SELECT count(*) INTO n FROM raw.raw_markets;
+    IF n <> 8   THEN problems := problems || format('raw_markets=%s (want 8); ', n); END IF;
+    SELECT count(*) INTO n FROM raw.raw_acquisition_costs;
+    IF n <> 768 THEN problems := problems || format('raw_acquisition_costs=%s (want 768); ', n); END IF;
+    SELECT count(*) INTO n FROM raw.raw_operating_costs;
+    IF n <> 144 THEN problems := problems || format('raw_operating_costs=%s (want 144); ', n); END IF;
+
+    SELECT count(*) INTO n FROM raw.raw_subscriptions s
+      LEFT JOIN raw.raw_merchants m USING (merchant_id) WHERE m.merchant_id IS NULL;
+    IF n > 0 THEN problems := problems || format('%s subs without merchant; ', n); END IF;
+
+    SELECT count(*) INTO n FROM raw.raw_subscriptions s
+      LEFT JOIN raw.raw_products p ON s.plan_sku = p.sku WHERE p.sku IS NULL;
+    IF n > 0 THEN problems := problems || format('%s subs without product; ', n); END IF;
+
+    SELECT count(*) INTO n FROM raw.raw_merchants m
+      LEFT JOIN raw.raw_markets k USING (country_code) WHERE k.country_code IS NULL;
+    IF n > 0 THEN problems := problems || format('%s merchants without market; ', n); END IF;
+
+    SELECT count(*) INTO n FROM raw.raw_subscriptions s
+      JOIN raw.raw_merchants m USING (merchant_id)
+      JOIN raw.raw_markets k ON m.country_code = k.country_code
+      WHERE s.currency <> k.currency;
+    IF n > 0 THEN problems := problems || format('%s currency mismatches; ', n); END IF;
+
+    SELECT count(*) INTO n FROM raw.raw_subscriptions
+      WHERE end_date IS NOT NULL AND end_date < start_date;
+    IF n > 0 THEN problems := problems || format('%s end_date before start_date; ', n); END IF;
+
+    SELECT count(*) INTO n FROM raw.raw_subscriptions WHERE mrr_local < 0;
+    IF n > 0 THEN problems := problems || format('%s negative mrr; ', n); END IF;
+
+    IF problems <> '' THEN
+        RAISE EXCEPTION 'DATA QUALITY GATE FAILED: %', problems;
+    END IF;
+    RAISE NOTICE 'data quality gate passed';
+END $$;

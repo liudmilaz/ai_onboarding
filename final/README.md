@@ -1,8 +1,8 @@
 # AI Onboarding — SaaS Analytics Platform (built)
 
 > This is the **`final/`** folder — the working platform. The project as it was
-> issued, unmodified, is preserved in [`../initial/`](../initial/). The six CSVs
-> in both folders are byte-identical.
+> issued is preserved unmodified in `../initial/`, which arrives in the
+> companion pull request. The six CSVs in both folders are byte-identical.
 
 **To start: open Claude Code in this directory and say "I'm ready."** Claude will walk you through the project step by step, explaining each concept and checking that you understand before moving on. You don't need to read anything else first.
 
@@ -108,10 +108,12 @@ Three environment details this stack depends on, each of which cost time to find
 Two carry deliberate caveats, both documented in the models and in
 `docs/business_requirements.md`:
 
-- **CAC is reported twice.** Attributed (€165.73, using the 23.5% of spend that
-  fell in months with signups) and blended (€705.20, counting every euro). They
-  give LTV:CAC of 5.52 and **1.30** respectively — the blended figure is the one
-  to act on.
+- **CAC is reported twice.** Attributed (€238.24, using only spend from months
+  that acquired customers) and blended (€1,013.72, counting every euro). They
+  give LTV:CAC of 3.84 and **0.90** respectively. The blended figure is the one
+  to act on, and at **below 1.0** it says each customer costs more to win than
+  they return. CAC counts acquired customers, not signups: only 32 of 46
+  signups in the window ever subscribed.
 - **Burn is derived from the P&L, not the cash ledger.** The recorded
   `cash_balance_eom` series contradicts the P&L by €85,519 and is a function of
   time rather than of the business (R² = 0.971 against a linear trend). See

@@ -146,8 +146,8 @@ corrections:
 3. **Verify integrity before building on a partial.** Check the prefix before
    resuming a download; check the schema before reusing a card.
 4. **Make the model state assumptions explicitly and surface the alternative.**
-   Reporting both attributed CAC (€165.73) and blended CAC (€705.20) exposed
-   that LTV:CAC is 5.52 or 1.30 depending on the question — far more useful than
+   Reporting both attributed CAC (€238.24) and blended CAC (€1,013.72) exposed
+   that LTV:CAC is 3.84 or 0.90 depending on the question — far more useful than
    one confident number.
 5. **Ask what methodology is in use, early.** The single highest-value question
    of the project, and it arrived late enough to require rework.

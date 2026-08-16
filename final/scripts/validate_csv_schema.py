@@ -43,8 +43,16 @@ def classify(values):
 
 def profile(path):
     with open(path, newline="") as fh:
-        rows = list(csv.reader(fh))
+        rows = [r for r in csv.reader(fh) if r]   # drop blank lines
     header, body = rows[0], rows[1:]
+    # Ragged rows were previously skipped by the `if i < len(r)` guard below,
+    # so a truncated line passed the contract and failed later inside COPY with
+    # an opaque error. Surface it here, at the gate that exists to catch it.
+    ragged = [n for n, r in enumerate(body, start=2) if len(r) != len(header)]
+    if ragged:
+        raise ValueError(
+            f"{os.path.basename(path)}: {len(ragged)} row(s) with wrong field "
+            f"count (expected {len(header)}); first at line {ragged[0]}")
     cols = []
     for i, name in enumerate(header):
         values = [r[i] for r in body if i < len(r)]
@@ -52,6 +60,7 @@ def profile(path):
             "name": name,
             "type": classify(values),
             "nullable": any(v == "" for v in values),
+            "all_empty": all(v == "" for v in values) if values else True,
         })
     return {"columns": cols, "row_count": len(body)}
 
@@ -104,6 +113,12 @@ def check():
             continue
 
         for w, g in zip(want, got):
+            # A column that happens to be entirely empty in this refresh cannot
+            # be typed, and classify() falls back to "text". Flagging that as a
+            # breach would block a perfectly valid load - e.g. a month in which
+            # no merchant churned leaves churn_date blank throughout.
+            if g["all_empty"] and w["nullable"]:
+                continue
             # Widening is a breach: a column contracted as integer arriving as
             # text means the loader will reject it or the models will misread it.
             if w["type"] != g["type"]:
@@ -126,9 +141,15 @@ def check():
 
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "--check"
-    if mode == "--generate":
-        generate()
-    elif mode == "--check":
-        check()
-    else:
-        sys.exit(f"usage: {sys.argv[0]} [--check|--generate]")
+    try:
+        if mode == "--generate":
+            generate()
+        elif mode == "--check":
+            check()
+        else:
+            sys.exit(f"usage: {sys.argv[0]} [--check|--generate]")
+    except ValueError as exc:
+        # Malformed CSV. Report it the same way a contract breach is reported -
+        # a traceback here would look like a bug in the validator rather than a
+        # problem with the data it is validating.
+        sys.exit(f"MALFORMED CSV\n\n  {exc}\n\nRefusing to load.")

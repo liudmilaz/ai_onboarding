@@ -97,9 +97,16 @@ active and runs to the end of the horizon.
 - **Verified:** 84.9% blended
 
 ### Q3 — Logo Churn
-- **Source:** `dim_merchant`, `dim_date`
-- **Formula:** merchants whose `churn_month` = m ÷ merchants active entering m
-- **Verified:** 13 of 160 over 24 months (8.1%)
+- **Source:** `int_merchant_months` (paying merchants only)
+- **Formula:** merchants with revenue last month and none this month ÷ merchants
+  with revenue entering the month
+- **Denominator is paying merchants, not all merchants.** 65 of the 160 rows in
+  `dim_merchant` never held a subscription. Including them inflated the base by
+  roughly 1.7× and put 4 never-paying merchants into the numerator.
+- **Detection matches `mart_revenue_movement`** — MRR present last month, absent
+  this month. Keying off `churn_date` instead placed logo churn one month before
+  the revenue it removed, because a subscription counts through its end month
+  inclusive, so the two series described different cohorts.
 
 ### Q4 — NRR and Revenue Churn
 - **Source:** `int_merchant_months` (merchant grain, not subscription grain)
@@ -139,13 +146,21 @@ active and runs to the end of the horizon.
 
   | | Attributed | Blended |
   |---|---|---|
-  | CAC | €165.73 | €705.20 |
-  | Payback | 10.9 months | 46.3 months |
-  | LTV:CAC | 5.52 | **1.30** |
+  | CAC | €238.24 | €1,013.72 |
+  | Payback | 15.6 months | 66.5 months |
+  | LTV:CAC | 3.84 | **0.90** |
 
-  The attributed view uses only the 23.5% of spend that fell in months with
-  signups. The blended view counts every euro. **The blended figure is the one a
-  CFO should act on**: at 1.30, growth is barely value-creating.
+  The attributed view uses only the spend that fell in months with acquisitions.
+  The blended view counts every euro. **The blended figure is the one a CFO
+  should act on**: at **0.90 it is below 1.0**, meaning that counting all
+  acquisition spend, each customer costs more to win than they are worth.
+
+  **Denominator note.** CAC counts *acquired customers*, not signups. Only 32 of
+  the 46 merchants who signed up in the window ever held a subscription — 65 of
+  the 160 merchants in the dataset never subscribed at all. Dividing by signups
+  understated CAC by 44% and made LTV:CAC incoherent, because LTV is built from
+  ARPA over paying merchants. Both halves of the ratio must describe the same
+  population.
 
 ### Q7 — Burn, Burn Multiple, Runway
 - **Source:** `fct_subscription_month`, `fct_operating_cost`, `fct_acquisition_spend`

@@ -141,9 +141,12 @@ models:
         tests: [not_null]
 
   - name: mart_unit_economics
-    description: "KPI: LTV, CAC, CAC Payback and LTV:CAC. Single-row scorecard."
+    description: >
+      "KPI: LTV, CAC, CAC Payback and LTV:CAC. Single-row scorecard. ltv_eur is
+      deliberately nullable: with zero observed churn there is no defensible
+      lifetime, and reporting a capped 60 months would be a fabricated number."
     columns:
-      - name: ltv_eur
+      - name: arpa_eur
         tests: [not_null]
 
   # -------------------------------------------------------------- intermediate

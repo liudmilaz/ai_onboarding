@@ -96,13 +96,19 @@ select
     -- before it feeds LTV. Both figures are exposed: the uncapped one shows how
     -- far the naive formula overshoots.
     round(1.0 / nullif(monthly_revenue_churn, 0), 1)            as implied_lifetime_months_uncapped,
-    least(round(1.0 / nullif(monthly_revenue_churn, 0), 1), 60) as expected_lifetime_months,
+    -- Postgres LEAST ignores NULLs - least(NULL, 60) returns 60 - so an
+    -- explicit guard is required or zero observed churn silently reports a
+    -- 60-month customer life instead of "unknown".
+    case when monthly_revenue_churn > 0
+         then least(round(1.0 / monthly_revenue_churn, 1), 60)
+    end                                                         as expected_lifetime_months,
 
     -- LTV = ARPA x gross margin x lifetime. Gross margin, not revenue: what a
     -- customer is worth is the profit they generate, not the cash they send.
-    round(arpa_eur * gross_margin
-          * least(1.0 / nullif(monthly_revenue_churn, 0), 60), 2)
-                                                                as ltv_eur,
+    case when monthly_revenue_churn > 0
+         then round(arpa_eur * gross_margin
+                    * least(1.0 / monthly_revenue_churn, 60), 2)
+    end                                                         as ltv_eur,
     round(arpa_eur * gross_margin / nullif(monthly_revenue_churn, 0), 2)
                                                                 as ltv_eur_uncapped,
 
@@ -124,8 +130,12 @@ select
                                                                 as blended_cac_payback_months,
 
     -- Rule of thumb: above 3 is healthy, below 1 means growth destroys value.
-    round(arpa_eur * gross_margin * least(1.0 / nullif(monthly_revenue_churn, 0), 60)
-          / nullif(cac_eur, 0), 2)                              as ltv_to_cac_ratio,
-    round(arpa_eur * gross_margin * least(1.0 / nullif(monthly_revenue_churn, 0), 60)
-          / nullif(blended_cac_eur, 0), 2)                      as ltv_to_blended_cac_ratio
+    case when monthly_revenue_churn > 0
+         then round(arpa_eur * gross_margin * least(1.0 / monthly_revenue_churn, 60)
+                    / nullif(cac_eur, 0), 2)
+    end                                                         as ltv_to_cac_ratio,
+    case when monthly_revenue_churn > 0
+         then round(arpa_eur * gross_margin * least(1.0 / monthly_revenue_churn, 60)
+                    / nullif(blended_cac_eur, 0), 2)
+    end                                                         as ltv_to_blended_cac_ratio
 from calc

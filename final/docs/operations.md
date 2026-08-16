@@ -94,6 +94,9 @@ a targeted hint. Start there. The failure modes actually encountered:
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| Auth error right after deleting `.env` | Postgres bakes the password in at initdb; a regenerated `.env` does not match an existing volume | `./start.sh --clean`, or restore the old `.env`. `start.sh` now detects this and says so |
+| `DATA QUALITY GATE FAILED: …` | Row counts or referential integrity are wrong after a load | The message names the failing check; inspect with `db/validate.sql` |
+| `MALFORMED CSV … wrong field count` | A truncated or over-long row | Fix the source file; the line number is reported |
 | `colima start` hangs silently, no output | Defaulted to QEMU, which is not installed | `colima start --vm-type vz --cpu 4 --memory 8 --disk 60` |
 | `unknown shorthand flag: 'd' in -d` | Homebrew installed the Compose plugin only for the installing user | `mkdir -p ~/.docker/cli-plugins && ln -sf $(which docker-compose) ~/.docker/cli-plugins/docker-compose` — `start.sh` also auto-detects |
 | Colima VM missing after reboot | The VM does not survive reboot, and is **per-user** | `colima start --vm-type vz`; a working VM on another account does not help |
@@ -165,7 +168,9 @@ Metabase's query pipeline is.
   gitignored and `chmod 600`.
 - A read-only **Analysts** group exists with query-builder access but no native
   SQL rights.
-- Both services bind to `localhost` only — nothing is exposed off the machine.
+- Both services bind to **`127.0.0.1` explicitly** in `docker-compose.yml`.
+  Docker's default `"5433:5432"` form binds `0.0.0.0`, which would put the
+  database on the LAN; the loopback prefix is what makes this note true.
 - This is a **local training deployment**. Before anything resembling production:
   put Postgres behind a network boundary, enable TLS on Metabase, rotate the
   generated credentials into a secret manager, and replace the single shared

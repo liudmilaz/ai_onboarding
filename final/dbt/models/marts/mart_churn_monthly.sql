@@ -1,39 +1,53 @@
 -- KPI: Logo Churn.
--- Business question: what share of paying merchants do we lose each month?
+-- Business question: what share of PAYING merchants do we lose each month?
 --
--- Logo churn counts customers, not euros. Pair it with
--- mart_revenue_movement.gross_revenue_churn_pct: losing one 199 EUR merchant
--- and one 9 EUR merchant is identical logo churn and very different revenue
--- churn, and the gap between the two is the interesting signal.
+-- The denominator is merchants who actually carried revenue entering the month,
+-- not merchants who exist. 65 of the 160 rows in dim_merchant never held a
+-- subscription at all; counting them inflated the base by ~1.7x and put 4
+-- never-paying merchants into the churn numerator.
+--
+-- Churn is detected the same way mart_revenue_movement detects it - MRR present
+-- last month, absent this month - so the two series describe the same event in
+-- the same month. Keying off dim_merchant.churn_month instead would put logo
+-- churn one month earlier than the revenue it removes, because a subscription
+-- is counted through its end month inclusive.
 
-with merchant_months as (
+with grid as (
 
-    select
-        d.date_month,
-        m.merchant_id,
-        (m.signup_month < d.date_month
-         and (m.churn_month is null or m.churn_month >= d.date_month))
-                                            as active_at_month_start,
-        (m.churn_month = d.date_month)      as churned_this_month
+    select d.date_month, m.merchant_id
     from {{ ref('dim_date') }} d
-    cross join {{ ref('dim_merchant') }} m
+    cross join (select distinct merchant_id from {{ ref('int_merchant_months') }}) m
 
 ), monthly as (
 
     select
+        g.date_month,
+        g.merchant_id,
+        coalesce(mm.mrr_eur, 0) as mrr_eur
+    from grid g
+    left join {{ ref('int_merchant_months') }} mm
+        on  g.date_month  = mm.month_start
+        and g.merchant_id = mm.merchant_id
+
+), movement as (
+
+    select
         date_month,
-        count(*) filter (where active_at_month_start) as merchants_at_start,
-        count(*) filter (where churned_this_month)    as merchants_churned
-    from merchant_months
-    group by 1
+        merchant_id,
+        mrr_eur,
+        lag(mrr_eur) over (partition by merchant_id order by date_month) as prev_mrr_eur
+    from monthly
 
 )
 
 select
     date_month,
-    merchants_at_start,
-    merchants_churned,
-    round(100.0 * merchants_churned / nullif(merchants_at_start, 0), 2)
-        as logo_churn_pct
-from monthly
-order by date_month
+    count(*) filter (where prev_mrr_eur > 0)                        as merchants_at_start,
+    count(*) filter (where prev_mrr_eur > 0 and mrr_eur = 0)        as merchants_churned,
+    count(*) filter (where coalesce(prev_mrr_eur, 0) = 0 and mrr_eur > 0)
+                                                                    as merchants_new,
+    round(100.0 * count(*) filter (where prev_mrr_eur > 0 and mrr_eur = 0)
+          / nullif(count(*) filter (where prev_mrr_eur > 0), 0), 2) as logo_churn_pct
+from movement
+group by 1
+order by 1

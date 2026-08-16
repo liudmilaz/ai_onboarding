@@ -189,6 +189,15 @@ Everything is matched by name and **updated** to match the definition in code.
     Orphans are now archived.
 - Verification must therefore run the cards, not just count them. `18/18
   returning data` is the only claim worth making.
+- A later review found three more of the same class, all invisible to a passing
+  run: `call()` chose its HTTP method on the *truthiness* of the body, so
+  `sync_schema` went out as GET and 404'd - masked entirely because Metabase
+  auto-syncs a newly created database, so it only failed on re-runs;
+  `archive_orphaned_cards` swept the whole instance rather than its own
+  collection, so a trainee's saved question would be archived; and
+  `ensure_database` returned early without pushing credentials, so a password
+  rotation broke every card while provisioning printed success. All three are
+  fixed and scoped to the provisioned collection.
 
 ---
 

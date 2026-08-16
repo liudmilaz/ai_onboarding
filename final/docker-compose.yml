@@ -15,14 +15,20 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
       POSTGRES_DB: ${POSTGRES_DB:?set in .env}
     ports:
-      - "5433:5432"
+      # Loopback only. "5433:5432" binds 0.0.0.0, which puts the database on
+      # the LAN and contradicts the security note in docs/operations.md.
+      - "127.0.0.1:5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
       - ./db:/db:ro
       - ./saas:/seed:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      # -h 127.0.0.1 forces TCP. Without it pg_isready succeeds over the Unix
+      # socket while the entrypoint's temporary init server is still running
+      # db/init/*.sql, so Metabase could start before the metabase database
+      # existed. The temp server does not listen on TCP, so this waits properly.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -38,7 +44,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       MB_DB_TYPE: postgres
       MB_DB_DBNAME: metabase

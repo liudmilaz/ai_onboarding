@@ -4,32 +4,38 @@
       {
         "name": "cost_id",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "year_month",
         "type": "date",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "country_code",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "channel",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "spend_amount",
         "type": "integer",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "currency",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       }
     ],
     "row_count": 768
@@ -39,37 +45,44 @@
       {
         "name": "country_code",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "country_name",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "region",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "currency",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "eur_fx",
         "type": "numeric",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "launch_year",
         "type": "integer",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "vat_rate",
         "type": "numeric",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       }
     ],
     "row_count": 8
@@ -79,47 +92,56 @@
       {
         "name": "merchant_id",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "merchant_name",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "business_type",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "country_code",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "city",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "signup_date",
         "type": "date",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "plan_type",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "status",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "churn_date",
         "type": "date",
-        "nullable": true
+        "nullable": true,
+        "all_empty": false
       }
     ],
     "row_count": 160
@@ -129,27 +151,32 @@
       {
         "name": "cost_id",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "year_month",
         "type": "date",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "cost_category",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "amount_eur",
         "type": "integer",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "description",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       }
     ],
     "row_count": 144
@@ -159,42 +186,50 @@
       {
         "name": "sku",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "name",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "type",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "price_eur",
         "type": "integer",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "cogs_eur",
         "type": "integer",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "gross_margin_pct",
         "type": "numeric",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "description",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "launched_at",
         "type": "date",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       }
     ],
     "row_count": 5
@@ -204,47 +239,56 @@
       {
         "name": "subscription_id",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "merchant_id",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "plan_sku",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "start_date",
         "type": "date",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "end_date",
         "type": "date",
-        "nullable": true
+        "nullable": true,
+        "all_empty": false
       },
       {
         "name": "mrr_local",
         "type": "integer",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "currency",
         "type": "text",
-        "nullable": false
+        "nullable": false,
+        "all_empty": false
       },
       {
         "name": "cancellation_reason",
         "type": "text",
-        "nullable": true
+        "nullable": true,
+        "all_empty": false
       },
       {
         "name": "previous_plan_sku",
         "type": "text",
-        "nullable": true
+        "nullable": true,
+        "all_empty": false
       }
     ],
     "row_count": 117
