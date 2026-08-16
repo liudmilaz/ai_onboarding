@@ -29,8 +29,8 @@ headline numbers materially.
 **Phase 1 — Discovery.** Claude profiled the CSVs and found something the
 project documentation did not contain: `raw_operating_costs` mixes a cash
 *balance* into the same column as five *cost* categories, so an unfiltered sum
-returns 15× the truth. This was found by sanity-checking a magnitude
-(€51,000/month against €1,500/month of revenue), not by any test.
+returns 16× the truth. This was found by sanity-checking a magnitude
+(€54,814/month against €1,500/month of revenue), not by any test.
 
 **Phase 2 — Architecture.** Postgres and Metabase were selected under time
 pressure and, honestly, by fiat rather than through the research process the
@@ -140,7 +140,7 @@ corrections:
 1. **Execute the artefact, never trust the success message.** Provisioning said
    success while five cards were broken. Run the cards, run the query, load the
    page.
-2. **Sanity-check magnitudes against a known anchor.** €51,000/month of costs
+2. **Sanity-check magnitudes against a known anchor.** €54,814/month of costs
    against €1,500/month of revenue; a 19-year customer lifetime. Both wrong,
    both plausible-looking, neither caught by tests.
 3. **Verify integrity before building on a partial.** Check the prefix before

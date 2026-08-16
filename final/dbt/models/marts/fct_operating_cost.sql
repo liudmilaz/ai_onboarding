@@ -7,7 +7,7 @@
 --
 -- The cash balance is deliberately NOT in this table. In the source CSV it sits
 -- in the same amount_eur column as these cost rows, which makes an unfiltered
--- SUM return roughly 15x the true monthly cost. A non-additive stock and a
+-- SUM return roughly 16x the true monthly cost. A non-additive stock and a
 -- fully-additive flow cannot share a grain - it lives in fct_cash_balance.
 
 select

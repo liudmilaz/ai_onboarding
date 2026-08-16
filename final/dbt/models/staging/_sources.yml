@@ -20,5 +20,5 @@ sources:
           NB: this table mixes a stock in with the flows. cost_category =
           'cash_balance_eom' is an end-of-month BALANCE sitting in the same
           amount_eur column as the five real cost categories. Summing without
-          filtering returns ~15x the true monthly cost. Split downstream into
+          filtering returns ~16x the true monthly cost. Split downstream into
           stg_operating_costs (flows) and stg_cash_balances (stock).

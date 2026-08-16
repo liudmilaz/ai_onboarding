@@ -46,8 +46,8 @@ and join only to the calendar.
 3. **`raw_operating_costs` mixes a stock in with the flows.** The category
    `cash_balance_eom` is an end-of-month *balance* sitting in the same
    `amount_eur` column as five genuine cost categories. An unfiltered
-   `SUM(amount_eur)` returns about **€51,000/month** instead of the true
-   **€3,419** — a 15× error that still looks like a plausible number, which is
+   `SUM(amount_eur)` returns about **€54,814/month** instead of the true
+   **€3,419** — a 16× error that still looks like a plausible number, which is
    what makes it dangerous.
 
 Convention 3 is not documented in `README.md` or `Requirements.md`. It was

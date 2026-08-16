@@ -157,7 +157,7 @@ header.
   additive, `cash_balance_eur` is semi-additive (last() only). A non-additive
   stock stored alongside additive flows in one column is a **grain violation** —
   which is exactly what `cash_balance_eom` is, and why separating it makes the
-  15× error structurally impossible rather than merely documented.
+  16× error structurally impossible rather than merely documented.
 - **At this scale Kimball buys nothing in performance.** 3,200 fact rows. The
   entire case is modelling discipline, drill-down capability, and using the
   vocabulary a BI architect is expected to work in.

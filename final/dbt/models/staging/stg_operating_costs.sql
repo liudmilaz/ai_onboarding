@@ -1,6 +1,6 @@
 -- Operating cost FLOWS only. The source table also carries a stock
 -- (cost_category = 'cash_balance_eom'), which is excluded here and surfaced
--- separately in stg_cash_balances. Leaving it in inflates monthly costs ~15x.
+-- separately in stg_cash_balances. Leaving it in inflates monthly costs ~16x.
 -- Already denominated in EUR; only the minor-units conversion is needed.
 
 select
